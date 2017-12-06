@@ -1,0 +1,4 @@
+useDynLib(variationalReg)
+exportPattern("^[[:alpha:]]+")
+import(Rcpp)
+import(truncnorm)
