@@ -8,7 +8,7 @@
 #SBATCH -e varsim.out
 #SBATCH --mail-type=ALL       # Type of email notification- BEGIN,END,FAIL,ALL
 #SBATCH --mail-user=amitmeir@uw.edu # Email to which notifications will be sent
-#SBATCH --array=2-99
+#SBATCH --array=1-100
 
 module load R
 

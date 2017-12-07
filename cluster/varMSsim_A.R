@@ -62,7 +62,7 @@ run.sim <- function(config) {
     projTrue <- round(coef(lm(mu ~ X[, selected] - 1)), 6)
 
     # Estimating --------------
-    fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01,
+    fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
                                 verbose = FALSE)
     polyCI <- polyhedralMS(X, y, ysig, selected, Eta = NULL)
     mle <- exactMSmle(X, y, ysig, threshold, nsteps = 4000, stepCoef = 0.01, stepRate = 0.6,
@@ -96,13 +96,13 @@ configurations <- expand.grid(n = c(250, 500, 1000),
                               p = c(200),
                               snr = c(0.05, 0.2, 0.8),
                               sparsity = c(1, 2, 4),
-                              covtype = 1:3,
+                              covtype = 1,
                               nselect = c(20),
                               reps = 2)
 
 set.seed(seed)
 results <- apply(configurations, 1, run.sim)
-filename <- paste("results/variationalSim_A", seed, ".rds", sep = "")
+filename <- paste("results/variationalSim_B", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)
 
 

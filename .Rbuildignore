@@ -1,6 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
-/simulations*
-/prototypes*
-/figures*
-/cluster*
+simulations/*
+prototypes/*
+figures/*
+cluster/*
