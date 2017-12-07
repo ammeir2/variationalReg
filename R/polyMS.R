@@ -1,4 +1,4 @@
-polyhedralMS <- function(X, y, ysig, selected, Eta = NULL) {
+polyhedralMS <- function(X, y, ysig, selected, Eta = NULL, level = 0.95) {
   p <- ncol(X)
   suffStat <- t(X) %*% y
   sigma <- t(X) %*% X * ysig^2
@@ -47,7 +47,7 @@ polyhedralMS <- function(X, y, ysig, selected, Eta = NULL) {
     plusSubset <- alpha > 0
     Vminus <- max((-Ay[minusSusbset] + alpha[minusSusbset] * theta) / alpha[minusSusbset])
     Vplus <- min((-Ay[plusSubset] + alpha[plusSubset] * theta) / alpha[plusSubset])
-    polyCI[i, ] <- findPolyCIlimits(theta, etaSigma, Vminus, Vplus, 0.05)
+    polyCI[i, ] <- findPolyCIlimits(theta, etaSigma, Vminus, Vplus, 1 - level)
   }
 
   return(polyCI)

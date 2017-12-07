@@ -37,7 +37,10 @@ exactMSmle <- function(X, y, ysig, threshold,
   betahat <- naive
   estimates <- matrix(nrow = nsteps + 1, ncol = length(betahat))
   estimates[1, ] <- betahat
-  if(verbose) pb <- txtProgressBar(min = 0, max = nsteps, style = 3)
+  if(verbose) {
+    print("Computing conditional MLE!")
+    pb <- txtProgressBar(min = 0, max = nsteps, style = 3)
+  }
   for(m in 1:nsteps) {
     if(verbose) setTxtProgressBar(pb, m)
     mu[selected] <- as.numeric(XtX %*% betahat)
@@ -60,6 +63,7 @@ exactMSmle <- function(X, y, ysig, threshold,
 
     estimates[m + 1, ] <- betahat
   }
+  if(verbose) close(pb)
 
   betahat <- colMeans(estimates[round(nrow(estimates)/2):nrow(estimates), ])
   #print(cbind(betahat, naive))

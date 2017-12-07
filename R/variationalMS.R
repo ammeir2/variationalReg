@@ -1,6 +1,8 @@
-approxConditionalMLE <- function(X, y, ysig, threshold, thresholdLevel = 0.01,
+approxConditionalMLE <- function(X, y, ysig, threshold,
+                                 thresholdMethod = c("poly", "naiveAdj"),
+                                 thresholdLevel = 0.01,
                                  true = NULL, trueCoef = NULL, varCI = TRUE,
-                                 bootSamples = 1000,
+                                 bootSamples = 2000,
                                  verbose = TRUE) {
   # Variational Estimate --------------------
   p <- ncol(X)
@@ -27,10 +29,22 @@ approxConditionalMLE <- function(X, y, ysig, threshold, thresholdLevel = 0.01,
   # Computing Variational CI ------------------
   naivesd <- summary(naiveFit)$coefficients[, 2]
   hardthreshold <- naive - sign(naive) * naivesd * qnorm(1 - thresholdLevel)
-  thresholdCoef <- naive
+  thresholdCoef <- mvarEst
   thresholdCoef[sign(naive) != sign(hardthreshold)] <- 0
   if(is.null(trueCoef)) {
+    thresholdMethod <- thresholdMethod[1]
     thresholdMean <- rep(0, p)
+    if(thresholdMethod == "poly") {
+      polyCI <- polyhedralMS(X, y, ysig, selected, Eta = NULL, level = 1 - thresholdLevel)
+      thresholdCoef <- mvarEst
+      thresholdCoef[sign(polyCI[, 1]) != sign(polyCI[, 2])] <- 0
+    } else if(thresholdMethod == "naiveAdj") {
+      hardthreshold <- naive - sign(naive) * naivesd * qnorm(1 - thresholdLevel)
+      thresholdCoef <- mvarEst
+      thresholdCoef[sign(naive) != sign(hardthreshold)] <- 0
+    } else {
+      stop("thresholdMethod not supported!")
+    }
     thresholdMean[selected] <- XtX %*% thresholdCoef
   } else {
     thresholdMean <- as.numeric(t(X) %*% X %*% true)
@@ -48,7 +62,7 @@ approxConditionalMLE <- function(X, y, ysig, threshold, thresholdLevel = 0.01,
                          selected = as.integer(selected),
                          threshold = sampthreshold,
                          precision = sampPrecision, nsamp = bootSamples,
-                         burnin = 1000, trim = 10, verbose = verbose)
+                         burnin = 1000, trim = 40, verbose = verbose)
   for(i in 1:ncol(condSamp)) {
     condSamp[, i] <- condSamp[, i] * sqrt(diagvar[i])
   }
@@ -78,6 +92,7 @@ approxConditionalMLE <- function(X, y, ysig, threshold, thresholdLevel = 0.01,
       if(verbose) setTxtProgressBar(pb, i)
       varBoot[i, ] <- msVariationalOptim(suffSamp[i, ], suffPrecision, suffCov, threshold)
     }
+    if(verbose) close(pb)
     varBoot <- varBoot %*% XtXinv
     varBootCI <- matrix(nrow = ncol(Xs), ncol = 2)
     if(!is.null(true)) {

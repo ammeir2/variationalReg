@@ -10,8 +10,8 @@ getCover <- function(ci, truth) {
   return(cover / length(truth))
 }
 
-set.seed(100)
-set.seed(102)
+# set.seed(100)
+# set.seed(108)
 
 p <- 100
 n <- 200
@@ -35,7 +35,7 @@ threshold <- mean(sort(abs(suffStat), decreasing = TRUE)[nselect:(nselect + 1)])
 selected <- abs(suffStat) > threshold
 true <- round(coef(lm(mu ~ X[, selected] - 1)), 6)
 
-fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.1 / nselect /n,
+fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
                             #true = trueCoef, trueCoef = true,
                             bootSamples = 400,
                             varCI = TRUE)
