@@ -7,8 +7,28 @@
 using namespace Rcpp;
 
 // mvtSampler
-NumericVector mvtSampler(NumericVector y, NumericVector mu, IntegerVector selected, NumericMatrix threshold, NumericMatrix precision, int nsamp, int burnin, int trim, bool verbose);
-RcppExport SEXP _variationalReg_mvtSampler(SEXP ySEXP, SEXP muSEXP, SEXP selectedSEXP, SEXP thresholdSEXP, SEXP precisionSEXP, SEXP nsampSEXP, SEXP burninSEXP, SEXP trimSEXP, SEXP verboseSEXP) {
+NumericVector mvtSampler(NumericVector y, NumericVector mu, IntegerVector selected, NumericMatrix threshold, NumericMatrix precision, int nsamp, int burnin, int trim, IntegerVector samporder, bool verbose);
+RcppExport SEXP _variationalReg_mvtSampler(SEXP ySEXP, SEXP muSEXP, SEXP selectedSEXP, SEXP thresholdSEXP, SEXP precisionSEXP, SEXP nsampSEXP, SEXP burninSEXP, SEXP trimSEXP, SEXP samporderSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type mu(muSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type selected(selectedSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type threshold(thresholdSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type precision(precisionSEXP);
+    Rcpp::traits::input_parameter< int >::type nsamp(nsampSEXP);
+    Rcpp::traits::input_parameter< int >::type burnin(burninSEXP);
+    Rcpp::traits::input_parameter< int >::type trim(trimSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type samporder(samporderSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(mvtSampler(y, mu, selected, threshold, precision, nsamp, burnin, trim, samporder, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// modmvtSampler
+NumericVector modmvtSampler(NumericVector y, NumericVector mu, IntegerVector selected, NumericMatrix threshold, NumericMatrix precision, int nsamp, int burnin, int trim, bool verbose, int allowedNonModel);
+RcppExport SEXP _variationalReg_modmvtSampler(SEXP ySEXP, SEXP muSEXP, SEXP selectedSEXP, SEXP thresholdSEXP, SEXP precisionSEXP, SEXP nsampSEXP, SEXP burninSEXP, SEXP trimSEXP, SEXP verboseSEXP, SEXP allowedNonModelSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -21,13 +41,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type burnin(burninSEXP);
     Rcpp::traits::input_parameter< int >::type trim(trimSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(mvtSampler(y, mu, selected, threshold, precision, nsamp, burnin, trim, verbose));
+    Rcpp::traits::input_parameter< int >::type allowedNonModel(allowedNonModelSEXP);
+    rcpp_result_gen = Rcpp::wrap(modmvtSampler(y, mu, selected, threshold, precision, nsamp, burnin, trim, verbose, allowedNonModel));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_variationalReg_mvtSampler", (DL_FUNC) &_variationalReg_mvtSampler, 9},
+    {"_variationalReg_mvtSampler", (DL_FUNC) &_variationalReg_mvtSampler, 10},
+    {"_variationalReg_modmvtSampler", (DL_FUNC) &_variationalReg_modmvtSampler, 10},
     {NULL, NULL, 0}
 };
 

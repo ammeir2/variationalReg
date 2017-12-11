@@ -13,15 +13,20 @@ getCover <- function(ci, truth) {
 # set.seed(100)
 # set.seed(108)
 
-p <- 100
-n <- 200
+p <- 200
+n <- 250
 pthreshold <- 0.05
 nselect <- 20
-snr <- 0.2
-sparsity <- 3
+snr <- 0.8
+sparsity <- 4
 
 X <- matrix(rnorm(n * p), ncol = p)
+rho <- 0.8
+sigma <- rho^as.matrix(dist(1:p))
+sqrtsig <- expm::sqrtm(sigma)
+X <- X %*% sqrtsig
 X <- scale(X)
+
 true <- rep(0, p)
 nonzero <- sample.int(p, sparsity)
 true[nonzero] <- (1 - 2 * rbinom(sparsity, 1, 0.5)) * rexp(sparsity)
@@ -36,8 +41,7 @@ selected <- abs(suffStat) > threshold
 true <- round(coef(lm(mu ~ X[, selected] - 1)), 6)
 
 fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
-                            #true = trueCoef, trueCoef = true,
-                            bootSamples = 400,
+                            bootSamples = 500,
                             varCI = TRUE)
 polyCI <- polyhedralMS(X, y, ysig, selected, Eta = NULL)
 mle <- exactMSmle(X, y, ysig, threshold, nsteps = 2000, stepCoef = 0.05, stepRate = 0.6)

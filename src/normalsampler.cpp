@@ -85,6 +85,7 @@ NumericVector mvtSampler(NumericVector y,
                          NumericMatrix threshold,
                          NumericMatrix precision,
                          int nsamp, int burnin, int trim,
+                         IntegerVector samporder,
                          bool verbose) {
   int totalIter = burnin + (nsamp - 1) * trim ;
   int frac = round(totalIter / 5) ;
@@ -96,9 +97,11 @@ NumericVector mvtSampler(NumericVector y,
 
   for(int i = 0 ; i < (burnin + trim * nsamp) ; i ++) {
     //Rcpp::Rcout<<"\n"<<i<<" " ;
-    for(int j = 0 ; j < p ; j ++) {
+    for(int k = 0 ; k < p ; k ++) {
+      int j = samporder[k] - 1 ;
       //Rcpp::Rcout<<j<<" " ;
       condmean = computeConditionalMean(mu, samp, precision, j) ;
+      //Rcpp::Rcout<<condmean<<" "<<samp[j]<<"\n" ;
       condsd = 1 / std::sqrt(precision(j, j)) ;
       if(selected[j] == 1) {
         nprob = R::pnorm(threshold(j, 0), condmean, condsd, 1, 1) ;
@@ -135,3 +138,96 @@ NumericVector mvtSampler(NumericVector y,
 
   return samples ;
 }
+
+bool checkSignEqual(double a, double b) {
+  if(a < 0 & b > 0) {
+    return false ;
+  } else {
+    return true ;
+  }
+}
+
+// [[Rcpp::export]]
+NumericVector modmvtSampler(NumericVector y,
+                         NumericVector mu,
+                         IntegerVector selected,
+                         NumericMatrix threshold,
+                         NumericMatrix precision,
+                         int nsamp, int burnin, int trim,
+                         bool verbose, int allowedNonModel) {
+  int totalIter = burnin + (nsamp - 1) * trim ;
+  int frac = round(nsamp / 5) ;
+  int p = y.length() ;
+  NumericMatrix samples(nsamp, p) ;
+  NumericVector samp = clone(y) ;
+  double condmean, condsd, pprob, nprob, u ;
+  int row = 0;
+  double proposal ;
+  IntegerVector nonModel(p, 0) ;
+  double tryCount = 0 ;
+  double aprop = 0;
+  int i = 0 ;
+  int fromLast = 0 ;
+
+  while(row <= nsamp) {
+    i++ ;
+    fromLast++ ;
+    //Rcpp::Rcout<<"\n"<<i<<" " ;
+    for(int j = 0 ; j < p ; j ++) {
+      condsd = 1 / std::sqrt(precision(j, j)) ;
+      condmean = computeConditionalMean(mu, samp, precision, j) ;
+      if(selected[j] == 1) {
+        bool accepted = false ;
+        //Rcpp::Rcout<<condmean<<" " ;
+        proposal = rnorm(1, condmean, condsd)[0] ;
+        if(proposal < threshold(j, 0) || proposal > threshold(j, 1)) {
+          samp[j] = proposal ;
+          nonModel[j] = 0 ;
+          accepted = true ;
+        } else if(sum(nonModel) < allowedNonModel) {
+          samp[j] = proposal ;
+          nonModel[j] = 1;
+          accepted = true ;
+        } else if(nonModel[j] == 1) {
+          samp[j] = proposal ;
+          accepted = true ;
+        }
+
+        //Rcpp::Rcout<<samp[j]<<" " ;
+
+        tryCount++ ;
+        aprop *= (tryCount - 1.0) / tryCount ;
+        if(accepted) {
+           aprop += 1.0 / tryCount ;
+        }
+
+        if(sum(nonModel) == 0 & fromLast >= trim & i > burnin) {
+          break ;
+        }
+      } else {
+        samp[j] = sampleBoundedTruncNorm(condmean, condsd, threshold(j, 0), threshold(j, 1)) ;
+      }
+    }
+
+    //Rcpp::Rcout<<sum(nonModel)<<" "<<fromLast<<"\n" ;
+    if(verbose & ((((row + 1) % frac) == 0) | (row == nsamp))) {
+      int out = (i + 1.0) / (1.0 * totalIter) * 100 ;
+      //Rcpp::Rcout<<out<<"% " ;
+    }
+
+    if(i >= burnin & fromLast >= trim & sum(nonModel) == 0) {
+      Rcpp::Rcout<<row<<" "<<fromLast<<" " ;
+      for(int j = 0 ; j < samples.ncol() ; j++) {
+        samples(row, j) = samp[j] ;
+      }
+      row++ ;
+      fromLast = 0 ;
+    }
+    //Rcpp::Rcout<<fromLast<<" "<<sum(nonModel)<<" ";
+  }
+
+  if(verbose) Rcpp::Rcout<<"\n" ;
+
+  return samples ;
+}
+

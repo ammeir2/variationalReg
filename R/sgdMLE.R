@@ -44,11 +44,14 @@ exactMSmle <- function(X, y, ysig, threshold,
   for(m in 1:nsteps) {
     if(verbose) setTxtProgressBar(pb, m)
     mu[selected] <- as.numeric(XtX %*% betahat)
-    condSamp <- mvtSampler(y = as.numeric(prevSamp), mu = mu,
+    samporder <- (1:p)[order(runif(p))]
+    start <- rep(0, p)
+    condSamp <- mvtSampler(y = start, mu = mu,
                            selected = as.integer(selected),
                            threshold = sampthreshold,
                            precision = precision, nsamp = max(nsamps, 4),
-                           burnin = 2, trim = 1, verbose = FALSE)
+                           burnin = 80, trim = 4, samporder = samporder,
+                           verbose = FALSE)
     prevSamp <- condSamp[nsamps, ]
     grad <- (suffStat[selected] - colMeans(condSamp)[selected])
     mt <- b1 * mt + (1 - b1) * grad

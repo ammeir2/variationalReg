@@ -1,4 +1,4 @@
-polyhedralMS <- function(X, y, ysig, selected, Eta = NULL, level = 0.95) {
+polyhedralMS <- function(X, y, ysig, selected, Eta = NULL, level = 0.95, computeCI = TRUE) {
   p <- ncol(X)
   suffStat <- t(X) %*% y
   sigma <- t(X) %*% X * ysig^2
@@ -37,7 +37,12 @@ polyhedralMS <- function(X, y, ysig, selected, Eta = NULL, level = 0.95) {
   }
 
   # Computing confidence intervals -------------------
-  polyCI <- matrix(nrow = ncol(Eta), ncol = 2)
+  if(computeCI) {
+    polyCI <- matrix(nrow = ncol(Eta), ncol = 2)
+  } else {
+    polyCI <- NULL
+  }
+  pval <- numeric(ncol(Eta))
   for(i in 1:ncol(Eta)) {
     eta <- Eta[, i]
     etaSigma <- as.numeric(t(eta) %*% sigma %*% eta)
@@ -47,10 +52,12 @@ polyhedralMS <- function(X, y, ysig, selected, Eta = NULL, level = 0.95) {
     plusSubset <- alpha > 0
     Vminus <- max((-Ay[minusSusbset] + alpha[minusSusbset] * theta) / alpha[minusSusbset])
     Vplus <- min((-Ay[plusSubset] + alpha[plusSubset] * theta) / alpha[plusSubset])
-    polyCI[i, ] <- findPolyCIlimits(theta, etaSigma, Vminus, Vplus, 1 - level)
+    if(computeCI) polyCI[i, ] <- findPolyCIlimits(theta, etaSigma, Vminus, Vplus, 1 - level)
+    pval[i] <- ptruncnorm(theta, Vminus, Vplus, 0, sqrt(etaSigma))
+    pval[i] <- 2 * min(1 - pval[i], pval[i])
   }
 
-  return(polyCI)
+  return(list(pval = pval, ci = polyCI))
 }
 
 

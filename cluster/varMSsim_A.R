@@ -24,12 +24,12 @@ run.sim <- function(config) {
   sparsity <- config[["sparsity"]]
   reps <- config[["reps"]]
   covtype <- config[["covtype"]]
+  rho <- config[["rho"]]
 
   # Setting up X covariance --------
   if(covtype == 1) {
     sqrtsig <- diag(p)
   } else if(covtype == 2) {
-    rho <- 0.8
     sigma <- rho^as.matrix(dist(1:p))
     sqrtsig <- expm::sqrtm(sigma)
   } else if(covtype == 3) {
@@ -42,7 +42,9 @@ run.sim <- function(config) {
   results <- vector("list", reps)
   coverage <- 0
   mse <- 0
-  for(m in 1:reps) {
+  m <- 0
+  while(m < reps) {
+    m <- m + 1
     # Generating Data ------------
     X <- matrix(rnorm(n * p), ncol = p)
     X <- X %*% sqrtsig
@@ -62,16 +64,29 @@ run.sim <- function(config) {
     projTrue <- round(coef(lm(mu ~ X[, selected] - 1)), 6)
 
     # Estimating --------------
-    fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
-                                verbose = FALSE)
-    polyCI <- polyhedralMS(X, y, ysig, selected, Eta = NULL)
-    mle <- exactMSmle(X, y, ysig, threshold, nsteps = 4000, stepCoef = 0.01, stepRate = 0.6,
-                      verbose = FALSE)
+    fit <- NULL
+    try(fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
+                                verbose = FALSE, bootSamples = 2000,
+                                #true = true, trueCoef = projTrue,
+                                varCI = TRUE))
+    # fit$varBootCI <- fit$naiveBootCI
+    polyfit <- NULL
+    try(polyfit <- polyhedralMS(X, y, ysig, selected, Eta = NULL))
+    polyCI <- polyfit$ci
+    polypval <- polyfit$pval
+    mle <- NULL
+    try(mle <- exactMSmle(X, y, ysig, threshold, nsteps = 2000, stepCoef = 0.01, stepRate = 0.6,
+                      verbose = FALSE))
+    if(is.null(fit) | is.null(mle) | is.null(polyfit)) {
+      m <- m - 1
+      next
+    }
 
     naiveFit <- lm(y ~ X[, selected] - 1)
+    naiveSD <- sqrt(diag(solve(t(X[, selected]) %*% X[, selected]))) * ysig
     naivenaiveCI <- matrix(nrow = nselect, ncol = 2)
-    naivenaiveCI[, 1] <- coef(naiveFit) - qnorm(.975) * sqrt(diag(vcov(naiveFit)))
-    naivenaiveCI[, 2] <- coef(naiveFit) + qnorm(.975) * sqrt(diag(vcov(naiveFit)))
+    naivenaiveCI[, 1] <- coef(naiveFit) - qnorm(.975) * naiveSD
+    naivenaiveCI[, 2] <- coef(naiveFit) + qnorm(.975) * naiveSD
 
     # Reporting -----------------
     estimates <- data.frame(naive = fit$naive, mle = mle$mle, var = fit$mEst,
@@ -87,22 +102,25 @@ run.sim <- function(config) {
     print(coverage)
     mse <- mse * (m - 1)/m  + apply(estimates[, -(4:5)], 2, function(x) sqrt(mean((x - projTrue)^2)))/m
     print(mse)
+    print(sapply(cis, function(x) mean(x[, 2] - x[, 1])))
   }
 
   return(results)
 }
 
-configurations <- expand.grid(n = c(250, 500, 1000),
-                              p = c(200),
+configurations <- expand.grid(n = c(200, 400, 800, 1600),
+                              p = c(100),
                               snr = c(0.05, 0.2, 0.8),
-                              sparsity = c(1, 2, 4),
-                              covtype = 1,
-                              nselect = c(20),
-                              reps = 2)
+                              sparsity = c(1, 4),
+                              covtype = c(2),
+                              rho = c(0, 0.35, 0.7),
+                              nselect = c(10),
+                              reps = 1)
 
 set.seed(seed)
-results <- apply(configurations, 1, run.sim)
-filename <- paste("results/variationalSim_B", seed, ".rds", sep = "")
+subconfig <- configurations[sample.int(nrow(configurations), 10), ]
+results <- apply(subconfig, 1, run.sim)
+filename <- paste("results/variationalSim_D", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)
 
 

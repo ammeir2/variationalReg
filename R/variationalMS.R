@@ -1,6 +1,6 @@
 approxConditionalMLE <- function(X, y, ysig, threshold,
                                  thresholdMethod = c("poly", "naiveAdj"),
-                                 thresholdLevel = 0.01,
+                                 thresholdLevel = 0.01, cilevel = 0.05,
                                  true = NULL, trueCoef = NULL, varCI = TRUE,
                                  bootSamples = 2000,
                                  verbose = TRUE) {
@@ -34,10 +34,18 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   if(is.null(trueCoef)) {
     thresholdMethod <- thresholdMethod[1]
     thresholdMean <- rep(0, p)
+    #thresholdMean <- as.numeric(suffStat)
     if(thresholdMethod == "poly") {
-      polyCI <- polyhedralMS(X, y, ysig, selected, Eta = NULL, level = 1 - thresholdLevel)
+      # mean threshold
+      # polypval <- rep(1, p)
+      # polypval[selected] <- polyhedralMS(X, y, ysig, selected, Eta = diag(p)[, selected], level = 1 - thresholdLevel,
+      #                          computeCI = FALSE)$pval
+      # polypval[is.nan(polypval)] <- 1
+      # thresholdMean[polypval < thresholdLevel] <- suffStat[polypval < thresholdLevel]
       thresholdCoef <- mvarEst
-      thresholdCoef[sign(polyCI[, 1]) != sign(polyCI[, 2])] <- 0
+      polypval <- polyhedralMS(X, y, ysig, selected, Eta = diag(p)[, selected], level = 1 - thresholdLevel,
+                               computeCI = FALSE)$pval
+      thresholdCoef[polypval > thresholdLevel] <- 0
     } else if(thresholdMethod == "naiveAdj") {
       hardthreshold <- naive - sign(naive) * naivesd * qnorm(1 - thresholdLevel)
       thresholdCoef <- mvarEst
@@ -58,11 +66,25 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   sampCov <- cov2cor(sampCov)
   sampPrecision <- solve(sampCov)
   if(verbose) print("Sampling!")
-  condSamp <- mvtSampler(y = as.numeric(suffStat / sqrt(diagvar)), mu = as.numeric(thresholdMean),
-                         selected = as.integer(selected),
-                         threshold = sampthreshold,
-                         precision = sampPrecision, nsamp = bootSamples,
-                         burnin = 1000, trim = 40, verbose = verbose)
+  restarts <- sum(selected) * 2
+  samples <- vector('list', restarts)
+  if(verbose) pb <- txtProgressBar(min = 0, max = restarts, style = 3)
+  for(i in 1:restarts) {
+    start <- rep(0, p) #suffStat / sqrt(diagvar)
+    # start[i] <- -start[i]
+    # start[selected][-i] <- start[selected][-i] * (1 - 2 * rbinom(sum(selected) - 1, 1, 0.5))
+    samporder <- (1:p)[order(runif(p))]
+    condSamp <- mvtSampler(y = start, mu = as.numeric(thresholdMean),
+                           selected = as.integer(selected),
+                           threshold = sampthreshold,
+                           precision = sampPrecision, nsamp = ceiling(bootSamples / restarts),
+                           burnin = 200, trim = 40, samporder = samporder, verbose = FALSE)
+    samples[[i]] <- condSamp
+    if(verbose) setTxtProgressBar(pb, i)
+  }
+  if(verbose) close(pb)
+  condSamp <- do.call("rbind", samples)
+  print(apply(condSamp[, selected], 2, function(x) min(mean(x < 0), mean(x > 0))))
   for(i in 1:ncol(condSamp)) {
     condSamp[, i] <- condSamp[, i] * sqrt(diagvar[i])
   }
@@ -70,48 +92,45 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   # Naive Cond Boot -----------------
   suffSamp <- condSamp[, selected]
   naiveBoot <- suffSamp %*% XtXinv
-  naiveBootCI <- matrix(nrow = ncol(Xs), ncol = 2)
   if(is.null(true)) {
     thresholdedNaive <- naive
     thresholdedNaive[thresholdCoef == 0] <- 0
   } else {
     thresholdedNaive <- trueCoef
   }
-  for(i in 1:nrow(naiveBootCI)) {
-    naiveBootCI[i, ] <- naive[i] - quantile(naiveBoot[, i] - thresholdedNaive[i], c(0.975, 0.025))
-  }
+  naiveBootCI <- computeBootCI(naiveBoot, thresholdedNaive, naive, cilevel)
 
   # Variational Cond Boot ----------------
   if(varCI) {
-    if(verbose) {
-      print("Boostrapping variational estimate!")
-      pb <- txtProgressBar(min = 0, max = nrow(suffSamp), style = 3)
-    }
-    varBoot <- matrix(nrow = nrow(suffSamp), ncol = sum(selected))
-    for(i in 1:nrow(suffSamp)) {
-      if(verbose) setTxtProgressBar(pb, i)
-      varBoot[i, ] <- msVariationalOptim(suffSamp[i, ], suffPrecision, suffCov, threshold)
-    }
-    if(verbose) close(pb)
-    varBoot <- varBoot %*% XtXinv
-    varBootCI <- matrix(nrow = ncol(Xs), ncol = 2)
-    if(!is.null(true)) {
-      thresholdCoef <- trueCoef
-    }
-
-    for(i in 1:nrow(varBootCI)) {
-      varBootCI[i, ] <- mvarEst[i] - quantile(varBoot[, i] - thresholdCoef[i], c(0.975, 0.025))
-    }
+    varBoot <- computeVarBootSample(suffSamp, suffPrecision, suffCov, XtXinv, threshold, verbose)
+    varBootCI <- computeBootCI(varBoot, thresholdCoef, mvarEst, cilevel)
   } else {
     varBootCI <- NULL
     varBoot <- NULL
   }
 
-  return(list(mEst = mvarEst, naive = naive,
-              naiveBootCI = naiveBootCI,
-              varBootCI = varBootCI,
-              naiveBoot = naiveBoot,
-              varBoot = varBoot))
+  result <- list(mEst = mvarEst, naive = naive,
+                 naiveBootCI = naiveBootCI,
+                 varBootCI = varBootCI,
+                 naiveBoot = naiveBoot,
+                 varBoot = varBoot,
+                 sampCoef = thresholdCoef,
+                 cilevel = cilevel,
+                 ysig = ysig,
+                 suffStat = suffStat,
+                 suffCov = suffCov,
+                 threshold = threshold,
+                 call = match.call())
+  class(result) <- "varMS"
+  return(result)
+}
+
+computeBootCI <- function(sample, sampparam, estimate, level) {
+  ci <- matrix(nrow = ncol(sample), ncol = 2)
+  for(i in 1:nrow(ci)) {
+    ci[i, ] <- estimate[i] - quantile(sample[, i] - sampparam[i], c(1 - level / 2, level / 2))
+  }
+  return(ci)
 }
 
 compSuffMeanLoglikM <- function(mean, suffStat, suffPrecision, suffCov, threshold) {
@@ -132,6 +151,21 @@ compMloglik <- function(param, y, Xs, ysig, suffCov, threshold) {
   return(-dens + sum(log(prob)))
 }
 
+computeVarBootSample <- function(suffSamp, suffPrecision, suffCov, XtXinv, threshold, verbose) {
+  if(verbose) {
+    print("Boostrapping variational estimate!")
+    pb <- txtProgressBar(min = 0, max = nrow(suffSamp), style = 3)
+  }
+  varBoot <- matrix(nrow = nrow(suffSamp), ncol = ncol(XtXinv))
+  for(i in 1:nrow(suffSamp)) {
+    if(verbose) setTxtProgressBar(pb, i)
+    varBoot[i, ] <- msVariationalOptim(suffSamp[i, ], suffPrecision, suffCov, threshold)
+  }
+  if(verbose) close(pb)
+  varBoot <- varBoot %*% XtXinv
+  return(varBoot)
+}
+
 msVariationalOptim <- function(Xsy, suffPrecision, suffCov, threshold) {
   optim(par = Xsy, fn = compSuffMeanLoglikM,
         method = "Nelder-Mead",
@@ -140,3 +174,16 @@ msVariationalOptim <- function(Xsy, suffPrecision, suffCov, threshold) {
         suffCov = suffCov,
         threshold = threshold)$par
 }
+
+computeNaiveCI <- function(suffStat, suffCov, selected, ysig, level) {
+  XtX <- suffCov / ysig^2
+  XtXinv <- solve(XtX)
+  coef <- as.numeric(XtXinv %*% suffStat)
+  coefcov <- XtXinv * ysig^2
+  quant <- qnorm(1 - level, sd = sqrt(diag(coefcov)))
+  ci <- matrix(nrow)
+}
+
+
+
+
