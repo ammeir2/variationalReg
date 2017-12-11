@@ -9,7 +9,7 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   suffStat <- t(X) %*% y
   selected <- abs(suffStat) > threshold
   Xs <- X[, selected]
-  suffCov <- t(Xs) %*% Xs * ysig^2
+  suffCov <- t(X) %*% X * ysig^2
   XtX <- t(Xs) %*% Xs
   XtXinv <- solve(XtX)
 
@@ -23,7 +23,9 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   #                  threshold = threshold)
 
   Xsy <- as.numeric(suffStat[selected, ])
-  suffEst <- msVariationalOptim(Xsy, suffPrecision, suffCov, threshold)
+  selectedCov <- XtX * ysig^2
+  selectedPrecision <- XtXinv / ysig^2
+  suffEst <- msVariationalOptim(Xsy, selectedPrecision, selectedCov, threshold)
   mvarEst <- as.numeric(XtXinv %*% suffEst)
 
   # Computing Variational CI ------------------
@@ -36,15 +38,10 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
     thresholdMean <- rep(0, p)
     #thresholdMean <- as.numeric(suffStat)
     if(thresholdMethod == "poly") {
-      # mean threshold
-      # polypval <- rep(1, p)
-      # polypval[selected] <- polyhedralMS(X, y, ysig, selected, Eta = diag(p)[, selected], level = 1 - thresholdLevel,
-      #                          computeCI = FALSE)$pval
-      # polypval[is.nan(polypval)] <- 1
-      # thresholdMean[polypval < thresholdLevel] <- suffStat[polypval < thresholdLevel]
       thresholdCoef <- mvarEst
-      polypval <- polyhedralMS(X, y, ysig, selected, Eta = diag(p)[, selected], level = 1 - thresholdLevel,
-                               computeCI = FALSE)$pval
+      polyfit <- polyhedralMS(as.numeric(suffStat), suffCov, ysig, selected, Eta = NULL, level = 1 - thresholdLevel,
+                               computeCI = FALSE)
+      polypval <- polyfit$pval
       thresholdCoef[polypval > thresholdLevel] <- 0
     } else if(thresholdMethod == "naiveAdj") {
       hardthreshold <- naive - sign(naive) * naivesd * qnorm(1 - thresholdLevel)
@@ -55,24 +52,21 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
     }
     thresholdMean[selected] <- XtX %*% thresholdCoef
   } else {
-    thresholdMean <- as.numeric(t(X) %*% X %*% true)
+    thresholdMean <- as.numeric(suffCov %*% true) / ysig^2
   }
   sampthreshold <- matrix(threshold, nrow = p, ncol = 2)
   sampthreshold[, 1] <- -sampthreshold[, 1]
-  sampCov <- t(X) %*% X * ysig^2
-  diagvar <- diag(sampCov)
+  diagvar <- diag(suffCov)
   thresholdMean <- thresholdMean / sqrt(diagvar)
   sampthreshold <- sampthreshold / sqrt(diagvar)
-  sampCov <- cov2cor(sampCov)
+  sampCov <- cov2cor(suffCov)
   sampPrecision <- solve(sampCov)
   if(verbose) print("Sampling!")
   restarts <- sum(selected) * 2
   samples <- vector('list', restarts)
   if(verbose) pb <- txtProgressBar(min = 0, max = restarts, style = 3)
   for(i in 1:restarts) {
-    start <- rep(0, p) #suffStat / sqrt(diagvar)
-    # start[i] <- -start[i]
-    # start[selected][-i] <- start[selected][-i] * (1 - 2 * rbinom(sum(selected) - 1, 1, 0.5))
+    start <- rep(0, p)
     samporder <- (1:p)[order(runif(p))]
     condSamp <- mvtSampler(y = start, mu = as.numeric(thresholdMean),
                            selected = as.integer(selected),
@@ -84,7 +78,7 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   }
   if(verbose) close(pb)
   condSamp <- do.call("rbind", samples)
-  print(apply(condSamp[, selected], 2, function(x) min(mean(x < 0), mean(x > 0))))
+  # print(apply(condSamp[, selected], 2, function(x) min(mean(x < 0), mean(x > 0))))
   for(i in 1:ncol(condSamp)) {
     condSamp[, i] <- condSamp[, i] * sqrt(diagvar[i])
   }
@@ -102,16 +96,20 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
 
   # Variational Cond Boot ----------------
   if(varCI) {
-    varBoot <- computeVarBootSample(suffSamp, suffPrecision, suffCov, XtXinv, threshold, verbose)
+    varBoot <- computeVarBootSample(suffSamp, selectedPrecision, selectedCov, XtXinv, threshold, verbose)
     varBootCI <- computeBootCI(varBoot, thresholdCoef, mvarEst, cilevel)
   } else {
     varBootCI <- NULL
     varBoot <- NULL
   }
 
+  polyCI <- polyhedralMS(as.numeric(suffStat), suffCov, ysig, selected, Eta = NULL, level = 1 - cilevel,
+                         computeCI = TRUE)$ci
+
   result <- list(mEst = mvarEst, naive = naive,
                  naiveBootCI = naiveBootCI,
                  varBootCI = varBootCI,
+                 polyCI = polyCI,
                  naiveBoot = naiveBoot,
                  varBoot = varBoot,
                  sampCoef = thresholdCoef,
@@ -120,6 +118,7 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
                  suffStat = suffStat,
                  suffCov = suffCov,
                  threshold = threshold,
+                 selected = selected,
                  call = match.call())
   class(result) <- "varMS"
   return(result)
@@ -176,12 +175,15 @@ msVariationalOptim <- function(Xsy, suffPrecision, suffCov, threshold) {
 }
 
 computeNaiveCI <- function(suffStat, suffCov, selected, ysig, level) {
-  XtX <- suffCov / ysig^2
+  XtX <- suffCov[selected == 1, ][, selected == 1] / ysig^2
   XtXinv <- solve(XtX)
-  coef <- as.numeric(XtXinv %*% suffStat)
+  coef <- as.numeric(XtXinv %*% suffStat[selected])
   coefcov <- XtXinv * ysig^2
   quant <- qnorm(1 - level, sd = sqrt(diag(coefcov)))
-  ci <- matrix(nrow)
+  ci <- matrix(nrow = nrow(XtX), ncol = 2)
+  ci[, 1] <- coef - quant * diag(coefcov)
+  ci[, 2] <- coef + quant * diag(coefcov)
+  return(ci)
 }
 
 

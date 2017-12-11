@@ -1,11 +1,10 @@
-polyhedralMS <- function(X, y, ysig, selected, Eta = NULL, level = 0.95, computeCI = TRUE) {
-  p <- ncol(X)
-  suffStat <- t(X) %*% y
-  sigma <- t(X) %*% X * ysig^2
+polyhedralMS <- function(suffStat, suffCov, ysig, selected, Eta = NULL, level = 0.95, computeCI = TRUE) {
+  p <- length(suffStat)
+  sigma <- suffCov
 
   if(is.null(Eta)) {
-    Eta <- matrix(0, ncol = sum(selected), nrow = ncol(X))
-    Eta[selected, ] <- solve(t(X[, selected]) %*% X[, selected])
+    Eta <- matrix(0, ncol = sum(selected), nrow = p)
+    Eta[selected, ] <- solve(suffCov[selected, selected] / ysig^2)
   }
 
   # Computing constraints -----------------------
@@ -17,7 +16,7 @@ polyhedralMS <- function(X, y, ysig, selected, Eta = NULL, level = 0.95, compute
   notSelected <- which(!selected)
 
   constraintInd <- 0
-  Arow <- rep(0, ncol(X))
+  Arow <- rep(0, ncol(suffCov))
   for(i in 1:sum(selected)) {
     Arow[whichSelected[i]] <- -sign(suffStat[whichSelected][i])
     for(j in 1:sum(!selected)){

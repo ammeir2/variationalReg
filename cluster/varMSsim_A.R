@@ -70,30 +70,32 @@ run.sim <- function(config) {
                                 #true = true, trueCoef = projTrue,
                                 varCI = TRUE))
     # fit$varBootCI <- fit$naiveBootCI
-    polyfit <- NULL
-    try(polyfit <- polyhedralMS(X, y, ysig, selected, Eta = NULL))
-    polyCI <- polyfit$ci
-    polypval <- polyfit$pval
+    polyCI <- fit$polyCI
     mle <- NULL
     try(mle <- exactMSmle(X, y, ysig, threshold, nsteps = 2000, stepCoef = 0.01, stepRate = 0.6,
                       verbose = FALSE))
-    if(is.null(fit) | is.null(mle) | is.null(polyfit)) {
+    if(is.null(fit) | is.null(mle)) {
       m <- m - 1
       next
     }
 
+    # Naive CI ---------
     naiveFit <- lm(y ~ X[, selected] - 1)
     naiveSD <- sqrt(diag(solve(t(X[, selected]) %*% X[, selected]))) * ysig
     naivenaiveCI <- matrix(nrow = nselect, ncol = 2)
     naivenaiveCI[, 1] <- coef(naiveFit) - qnorm(.975) * naiveSD
     naivenaiveCI[, 2] <- coef(naiveFit) + qnorm(.975) * naiveSD
 
+    # Computing hybrid CI -------
+    hybrid <- summary(fit, ci_types = c("poly", "naiveBoot"), ci_level = 0.05 / 2)
+    hybrid <- cbind(pmax(hybrid[[1]][, 1], hybrid[[2]][, 1]), pmin(hybrid[[1]][, 2], hybrid[[2]][, 2]))
+
     # Reporting -----------------
     estimates <- data.frame(naive = fit$naive, mle = mle$mle, var = fit$mEst,
                             true = true[selected], projTrue = projTrue)
     cis <- list(naive = naivenaiveCI,
                 naiveBoot = fit$naiveBootCI, varBoot = fit$varBootCI,
-                poly = polyCI)
+                hybrid = hybrid, poly = polyCI)
     results[[m]] <- list(config = config, estimate = estimates, cis = cis)
 
     # Evaluating ----------------
@@ -111,16 +113,15 @@ run.sim <- function(config) {
 configurations <- expand.grid(n = c(200, 400, 800, 1600),
                               p = c(100),
                               snr = c(0.05, 0.2, 0.8),
-                              sparsity = c(1, 4),
+                              sparsity = c(1, 2, 4),
                               covtype = c(2),
                               rho = c(0, 0.35, 0.7),
                               nselect = c(10),
                               reps = 1)
-
 set.seed(seed)
-subconfig <- configurations[sample.int(nrow(configurations), 10), ]
+subconfig <- configurations[sample.int(nrow(configurations), 20), ]
 results <- apply(subconfig, 1, run.sim)
-filename <- paste("results/variationalSim_D", seed, ".rds", sep = "")
+filename <- paste("results/variationalSim_F", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)
 
 
