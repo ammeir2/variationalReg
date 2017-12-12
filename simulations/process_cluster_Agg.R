@@ -10,7 +10,7 @@ getCover <- function(ci, truth) {
   return(cover / length(truth))
 }
 
-filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSimAgg_B_*"))
+filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSimAgg_C_*"))
 filenames <- lapply(filenames, function(x) paste0('simulations/results/', x))[-c(3, 4)]
 results <- lapply(filenames, function(x) readRDS(x))
 results <- do.call("c", results)
@@ -21,10 +21,7 @@ library(reshape2)
 library(ggplot2)
 # Cover ---
 computeCover <- function(x) {
-  cis <- x$cis
-  # naive <- x$cis$naive
-  # cis[2:3] <- lapply(cis[2:3], function(x) cbind(pmin(x[, 1], naive[, 1]), pmax(x[, 2], naive[, 2])))
-  x$cis <- cis
+  x$cis <- x$cis[-5]
 
   cover <- sapply(x$cis, getCover, x$estimates$true)
   result <- c(x$config, cover)
@@ -81,10 +78,7 @@ ggplot(subset(powerdat)) +
 
 # Size -----
 computeSize <- function(x) {
-  cis <- x$cis
-  # naive <- x$cis$naive
-  # cis[2:3] <- lapply(cis[2:3], function(x) cbind(pmin(x[, 1], naive[, 1]), pmax(x[, 2], naive[, 2])))
-  x$cis <- cis
+  x$cis <- x$cis[-5]
 
   size <- sapply(x$cis, function(x) mean(x[, 2] - x[, 1]))
   size <- log2(size[-1] / size[1])
