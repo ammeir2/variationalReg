@@ -79,6 +79,7 @@ run.sim <- function(config) {
       testPval <- pchisq(waldstat, df = p, lower.tail = FALSE)
       #print(testPval)
     }
+    splity <- mu + rnorm(n, sd = ysig) - mean(y)
 
     # PSAT ---------------
     psat <- PSAT::psatGLM(X, y, test = "wald",
@@ -102,12 +103,12 @@ run.sim <- function(config) {
     print(nsamps / fit$tries)
 
     # PSAT threshold ---
-    ptfit <- residualConditionalBootstrap(X, y, ysig, selected = NULL,
-                                        cilevel = 0.05, thresholdLevel = pthreshold^2/p,
-                                        bootSamples = nsamps, verbose = FALSE,
-                                        sampCoef = sampCoef,
-                                        precision = solve(XtX * ysig^2), testLevel = pthreshold)
-    print(nsamps / fit$tries)
+    # ptfit <- residualConditionalBootstrap(X, y, ysig, selected = NULL,
+    #                                     cilevel = 0.05, thresholdLevel = pthreshold^2/p,
+    #                                     bootSamples = nsamps, verbose = FALSE,
+    #                                     sampCoef = sampCoef,
+    #                                     precision = solve(XtX * ysig^2), testLevel = pthreshold)
+    # print(nsamps / fit$tries)
 
     # Naive -----
     naivefit <- lm(y ~ X - 1)
@@ -118,12 +119,21 @@ run.sim <- function(config) {
     naiveCI[, 1] <- naive - naiveSD * qnorm(0.975)
     naiveCI[, 2] <- naive + naiveSD * qnorm(0.975)
 
+    # Independent -----
+    indfit <- lm(splity ~ X - 1)
+    indcoef <- coef(indfit)
+    indSD <- sqrt(diag(vcov(indfit)))
+    indCI <- matrix(nrow = p, ncol = 2)
+    indCI[, 1] <- indcoef - indSD * qnorm(0.975)
+    indCI[, 2] <- indcoef + indSD * qnorm(0.975)
+
+
     # Reporting ---------
     cis <- list(naive = naiveCI,
                 switch = psat$switchCI,
                 poly = psat$polyCI,
                 boot = fit$ci,
-                bootpsat = ptfit$ci)
+                ind = indCI)
     estimates <- data.frame(true = true)
     results[[m]] <- list(config = config, cis = cis, estimates = estimates)
 
@@ -147,8 +157,9 @@ configurations <- expand.grid(n = c(100),
                               pthreshold = c(0.1, 0.01, 0.001),
                               reps = 1)
 set.seed(seed)
+runif(10)
 results <- apply(configurations, 1, run.sim)
-filename <- paste("results/variationalSimAgg_B", seed, ".rds", sep = "")
+filename <- paste("results/variationalSimAgg_C", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)
 
 

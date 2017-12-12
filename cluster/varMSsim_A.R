@@ -62,18 +62,19 @@ run.sim <- function(config) {
     threshold <- mean(sort(abs(suffStat), decreasing = TRUE)[nselect:(nselect + 1)])
     selected <- abs(suffStat) > threshold
     projTrue <- round(coef(lm(mu ~ X[, selected] - 1)), 6)
+    ysplit <- (mu + rnorm(n, sd = ysig)) - mean(y)
 
     # Estimating --------------
     fit <- NULL
     try(fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
-                                verbose = FALSE, bootSamples = 2000,
+                                verbose = TRUE, bootSamples = 2000,
                                 #true = true, trueCoef = projTrue,
                                 varCI = TRUE))
     # fit$varBootCI <- fit$naiveBootCI
     polyCI <- fit$polyCI
     mle <- NULL
     try(mle <- exactMSmle(X, y, ysig, threshold, nsteps = 2000, stepCoef = 0.01, stepRate = 0.6,
-                      verbose = FALSE))
+                      verbose = TRUE))
     if(is.null(fit) | is.null(mle)) {
       m <- m - 1
       next
@@ -90,19 +91,28 @@ run.sim <- function(config) {
     hybrid <- summary(fit, ci_types = c("poly", "naiveBoot"), ci_level = 0.05 / 2)
     hybrid <- cbind(pmax(hybrid[[1]][, 1], hybrid[[2]][, 1]), pmin(hybrid[[1]][, 2], hybrid[[2]][, 2]))
 
+    # Split estimator ------
+    indfit <- lm(ysplit ~ X[, selected] - 1)
+    indCoef <- coef(indfit)
+    indSD <- sqrt(diag(vcov(indfit)))
+    indCI <- matrix(nrow = nselect, ncol = 2)
+    indCI[, 1] <- indCoef - qnorm(.975) * indSD
+    indCI[, 2] <- indCoef + qnorm(.975) * indSD
+
     # Reporting -----------------
     estimates <- data.frame(naive = fit$naive, mle = mle$mle, var = fit$mEst,
+                            ind = indCoef,
                             true = true[selected], projTrue = projTrue)
     cis <- list(naive = naivenaiveCI,
                 naiveBoot = fit$naiveBootCI, varBoot = fit$varBootCI,
-                hybrid = hybrid, poly = polyCI)
+                hybrid = hybrid, poly = polyCI, ind = indCI)
     results[[m]] <- list(config = config, estimate = estimates, cis = cis)
 
     # Evaluating ----------------
     print(c(m = m, config))
     coverage <- coverage * (m - 1) / m + sapply(cis, getCover, projTrue) / m
     print(coverage)
-    mse <- mse * (m - 1)/m  + apply(estimates[, -(4:5)], 2, function(x) sqrt(mean((x - projTrue)^2)))/m
+    mse <- mse * (m - 1)/m  + apply(estimates[, -(5:6)], 2, function(x) sqrt(mean((x - projTrue)^2)))/m
     print(mse)
     print(sapply(cis, function(x) mean(x[, 2] - x[, 1])))
   }
@@ -119,9 +129,10 @@ configurations <- expand.grid(n = c(200, 400, 800, 1600),
                               nselect = c(10),
                               reps = 1)
 set.seed(seed)
-subconfig <- configurations[sample.int(nrow(configurations), 20), ]
+runif(2)
+subconfig <- configurations[sample.int(nrow(configurations), 28), ]
 results <- apply(subconfig, 1, run.sim)
-filename <- paste("results/variationalSim_F", seed, ".rds", sep = "")
+filename <- paste("results/variationalSim_G", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)
 
 
