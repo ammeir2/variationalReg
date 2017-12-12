@@ -10,7 +10,7 @@ getCover <- function(ci, truth) {
   return(cover / length(truth))
 }
 
-filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSimAgg_A_*"))
+filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSimAgg_B_*"))
 filenames <- lapply(filenames, function(x) paste0('simulations/results/', x))[-c(3, 4)]
 results <- lapply(filenames, function(x) readRDS(x))
 results <- do.call("c", results)
@@ -76,7 +76,8 @@ ggplot(subset(powerdat)) +
   facet_grid(sparsity ~ pthreshold, labeller = "label_both", scales = "free_y") +
   theme_bw() +
   geom_segment(aes(x = log2(snr), xend = log2(snr), col = type, linetype = type,
-                   y = power + 2 * sd, yend = power - 2*sd))
+                   y = power + 2 * sd, yend = power - 2*sd)) +
+  ylim(0, 1)
 
 # Size -----
 computeSize <- function(x) {

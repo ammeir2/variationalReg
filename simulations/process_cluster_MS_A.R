@@ -34,8 +34,33 @@ names(msedat)[8:9] <- c("type", "rmse")
 msedat <- summarize(group_by(msedat, n, p, snr, sparsity, covtype, nselect, type, rho),
                     sd = sd(rmse, na.rm = TRUE) / sqrt(length(rmse)) ,
                     rmse = mean(rmse, na.rm = TRUE))
-ggplot(subset(msedat, covtype == 2 & rho == 0.7)) + geom_line(aes(x = log2(n), y = rmse, col = type, linetype = type)) +
+ggplot(subset(msedat, covtype == 2 & rho == 0.35)) + geom_line(aes(x = log2(n), y = rmse, col = type, linetype = type)) +
   facet_grid(sparsity ~ snr, labeller = "label_both") + theme_bw()
+
+# Rel MSE -------
+computeRelMSE <- function(x) {
+  true <- x$estimate[, 5]
+  mse <- apply(x$estimate[, -c(4:5)], 2, function(x) sqrt(mean((x - true)^2)))
+  relmse <- log2(mse[2:3] / mse[1])
+  result <- c(x$config, relmse)
+  return(result)
+}
+relmsedat <- t(sapply(results, computeRelMSE))
+relmsedat <- data.frame(relmsedat)
+relmsedat$reps <- NULL
+relmsedat <- melt(relmsedat, id = c("n", "p", "snr", "sparsity", "covtype", "nselect", "rho"))
+names(relmsedat)[8:9] <- c("type", "rmse")
+relmsedat <- summarize(group_by(relmsedat, n, p, snr, sparsity, covtype, nselect, type, rho),
+                    sd = sd(rmse, na.rm = TRUE) / sqrt(length(rmse)) ,
+                    rmse = mean(rmse, na.rm = TRUE))
+ggplot(subset(relmsedat, covtype == 2 & rho == 0.35)) +
+  geom_line(aes(x = log2(n), y = rmse, col = type, linetype = type)) +
+  geom_point(aes(x = log2(n), y = rmse, col = type, shape = type)) +
+  facet_grid(sparsity ~ snr, labeller = "label_both") + theme_bw() +
+  geom_hline(yintercept = 0) +
+  geom_segment(aes(x = log2(n), xend = log2(n), y = rmse - 2*sd, yend = rmse + 2*sd,
+                   linetype = type, col = type)) +
+  ylab("Relative MSE") + xlab("log2(sample size)")
 
 # Cover ---
 computeCover <- function(x) {
@@ -56,7 +81,7 @@ names(coverdat)[8:9] <- c("type", "cover")
 coverdat <- summarize(group_by(coverdat, n, p, snr, sparsity, covtype, nselect, type, rho),
                     sd = sd(cover, na.rm = TRUE) / sqrt(length(cover)) ,
                     cover = mean(cover, na.rm = TRUE))
-ggplot(subset(coverdat, covtype == 2 & rho == 0.7)) +
+ggplot(subset(coverdat, covtype == 2 & rho == 0.35)) +
   geom_line(aes(x = log2(n), y = cover, col = type, linetype = type)) +
   facet_grid(sparsity ~ snr, labeller = "label_both") + theme_bw() +
   geom_segment(aes(x = log2(n), xend = log2(n), col = type,
@@ -83,7 +108,7 @@ names(sizedat)[8:9] <- c("type", "relsize")
 sizedat <- summarize(group_by(sizedat, n, p, snr, sparsity, covtype, nselect, type, rho),
                       sd = sd(relsize, na.rm = TRUE) / sqrt(length(relsize)) ,
                       relsize = mean(relsize, na.rm = TRUE))
-ggplot(subset(sizedat, covtype == 2 & rho == 0)) +
+ggplot(subset(sizedat, covtype == 2 & rho == 0.35)) +
   geom_line(aes(x = log2(n), y = relsize, col = type, linetype = type)) +
   geom_point(aes(x = log2(n), y = relsize, col = type, shape = type)) +
   facet_grid(sparsity ~ snr, labeller = "label_both") + theme_bw() +
@@ -116,7 +141,7 @@ names(powerdat)[8:9] <- c("type", "power")
 powerdat <- summarize(group_by(powerdat, n, p, snr, sparsity, covtype, nselect, type, rho),
                      sd = sd(power, na.rm = TRUE) / sqrt(length(power)) ,
                      power = mean(power, na.rm = TRUE))
-ggplot(subset(powerdat, covtype == 2 & rho == 0.7)) +
+ggplot(subset(powerdat, covtype == 2 & rho == 0.35)) +
   geom_line(aes(x = log2(n), y = power, col = type, linetype = type)) +
   geom_point(aes(x = log2(n), y = power, col = type, shape = type)) +
   facet_grid(sparsity ~ snr, labeller = "label_both", scales = "free_y") +
