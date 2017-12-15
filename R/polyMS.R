@@ -1,10 +1,18 @@
-polyhedralMS <- function(suffStat, suffCov, ysig, selected, Eta = NULL, level = 0.95, computeCI = TRUE) {
+polyhedralMS <- function(y, X, suffStat, suffCov, ysig, selected, Eta = NULL, level = 0.95,
+                         computeCI = TRUE,
+                         computeBootCI = TRUE,
+                         verbose = TRUE,
+                         delta = 10^-6) {
   p <- length(suffStat)
   sigma <- suffCov
 
   if(is.null(Eta)) {
     Eta <- matrix(0, ncol = sum(selected), nrow = p)
     Eta[selected, ] <- solve(suffCov[selected, selected] / ysig^2)
+  }
+
+  if(computeBootCI) {
+    bootEta <- solve(t(X[, selected]) %*% X[, selected]) %*% t(X[, selected])
   }
 
   # Computing constraints -----------------------
@@ -41,6 +49,17 @@ polyhedralMS <- function(suffStat, suffCov, ysig, selected, Eta = NULL, level = 
   } else {
     polyCI <- NULL
   }
+
+  if(computeBootCI) {
+    bootCI <- matrix(nrow = ncol(Eta), ncol = 2)
+    if(verbose) {
+      print("Computing polyhedral bootstrap!")
+      pb <- txtProgressBar(min = 0, max = ncol(Eta), style = 3)
+    }
+  } else {
+    bootCI <- NULL
+  }
+
   pval <- numeric(ncol(Eta))
   for(i in 1:ncol(Eta)) {
     eta <- Eta[, i]
@@ -51,34 +70,86 @@ polyhedralMS <- function(suffStat, suffCov, ysig, selected, Eta = NULL, level = 
     plusSubset <- alpha > 0
     Vminus <- max((-Ay[minusSusbset] + alpha[minusSusbset] * theta) / alpha[minusSusbset])
     Vplus <- min((-Ay[plusSubset] + alpha[plusSubset] * theta) / alpha[plusSubset])
-    if(computeCI) polyCI[i, ] <- findPolyCIlimits(theta, etaSigma, Vminus, Vplus, 1 - level)
+    if(computeCI) polyCI[i, ] <- findPolyCIlimits(y, theta, eta, etaSigma, Vminus, Vplus, 1 - level, boot = FALSE)
+    if(computeBootCI) {
+      if(verbose) setTxtProgressBar(pb, i)
+      booteta <- as.numeric(bootEta[i, ])
+      bootCI[i, ] <- findPolyCIlimits(y, theta, booteta, etaSigma, Vminus, Vplus, 1 - level,
+                                      boot = TRUE, delta = delta,
+                                      bootsamps = 2000)
+    }
     pval[i] <- ptruncnorm(theta, Vminus, Vplus, 0, sqrt(etaSigma))
     pval[i] <- 2 * min(1 - pval[i], pval[i])
   }
 
-  return(list(pval = pval, ci = polyCI))
+  if(computeBootCI & verbose) {
+    close(pb)
+  }
+
+  return(list(pval = pval, ci = polyCI, bootCI = bootCI))
 }
 
 
-findPolyCIlimits <- function(theta, etaSigma, lower, upper, alpha) {
+findPolyCIlimits <- function(y, theta, eta, etaSigma, lower, upper, alpha,
+                             boot = FALSE, delta = 0, c = 1.0001,
+                             bootsamps = 2000) {
+  if(boot) {
+    center <- mean(y)
+    theta <- as.numeric(t(eta) %*% y)
+    y <- y - center
+    n <- length(y)
+    bootsamps <- replicate(bootsamps, sum(eta * sample(y, replace = TRUE)))
+  }
+
   llim <- theta
-  ltempPval <- ptruncNorm(llim, theta, sqrt(etaSigma), lower, upper)
-  while(ltempPval < 1 - alpha / 2) {
-    llim <- llim - sqrt(etaSigma) * 0.1
+  steps <- 0
+  if(boot) {
+    ltempPval <- tibBootQuantile(llim, theta, bootsamps, lower, upper, c, delta = delta)
+    step <- sd(bootsamps)
+  } else {
     ltempPval <- ptruncNorm(llim, theta, sqrt(etaSigma), lower, upper)
+    step <- sqrt(etaSigma)
+  }
+  while(ltempPval < 1 - alpha / 2) {
+    steps <- steps + 1
+    llim <- llim - step * 0.1
+    if(boot) {
+      ltempPval <- tibBootQuantile(llim, theta, bootsamps, lower, upper, c, delta = delta)
+    } else {
+      ltempPval <- ptruncNorm(llim, theta, sqrt(etaSigma), lower, upper)
+    }
     if(is.nan(ltempPval)) {
-      llim <- llim + sqrt(etaSigma) * 0.1
+      llim <- llim + step * 0.1
+      break
+    }
+    if(steps > 10^5) {
+      ltempPval <- NaN
       break
     }
   }
 
   ulim <- theta
-  utempPval <- ptruncNorm(ulim, theta, sqrt(etaSigma), lower, upper)
-  while(utempPval > alpha / 2) {
-    ulim <- ulim + sqrt(etaSigma) * 0.1
+  if(boot) {
+    utempPval <- tibBootQuantile(ulim, theta, bootsamps, lower, upper, c, delta = delta)
+  } else {
     utempPval <- ptruncNorm(ulim, theta, sqrt(etaSigma), lower, upper)
+  }
+
+  steps <- 0
+  while(utempPval > alpha / 2) {
+    steps <- steps + 1
+    ulim <- ulim + step * 0.1
+    if(boot) {
+      utempPval <- tibBootQuantile(ulim, theta, bootsamps, lower, upper, c, delta = delta)
+    } else {
+      utempPval <- ptruncNorm(ulim, theta, sqrt(etaSigma), lower, upper)
+    }
     if(is.nan(utempPval)) {
-      ulim <- ulim - sqrt(etaSigma) * 0.1
+      ulim <- ulim - step * 0.1
+      break
+    }
+    if(steps > 10^5) {
+      utempPval <- NaN
       break
     }
   }
@@ -87,8 +158,13 @@ findPolyCIlimits <- function(theta, etaSigma, lower, upper, alpha) {
     uci <- ulim
   } else {
     uci <- NULL
-    capture.output(invisible(try(uci <- uniroot(f = function(x) ptruncNorm(x, theta, sqrt(etaSigma), lower, upper) - alpha / 2,
-                                                interval = c(llim, ulim))$root)))
+    if(boot) {
+      capture.output(invisible(try(uci <- uniroot(f = function(x) tibBootQuantile(x, theta, bootsamps, lower, upper, c, delta = delta) - alpha / 2,
+                                                  interval = c(llim, ulim))$root)))
+    } else {
+      capture.output(invisible(try(uci <- uniroot(f = function(x) ptruncNorm(x, theta, sqrt(etaSigma), lower, upper) - alpha / 2,
+                                                  interval = c(llim, ulim))$root)))
+    }
     if(is.null(uci)){
       uci <- ulim
     }
@@ -98,8 +174,13 @@ findPolyCIlimits <- function(theta, etaSigma, lower, upper, alpha) {
     lci <- llim
   } else {
     lci <- NULL
-    capture.output(invisible(try(lci <- uniroot(f = function(x) ptruncNorm(x, theta, sqrt(etaSigma), lower, upper) - (1 - alpha / 2),
-                                                interval = c(llim, ulim))$root)))
+    if(boot) {
+      capture.output(invisible(try(lci <- uniroot(f = function(x) tibBootQuantile(x, theta, bootsamps, lower, upper, c, delta = delta) - (1 - alpha / 2),
+                                                  interval = c(llim, ulim))$root)))
+    } else {
+      capture.output(invisible(try(lci <- uniroot(f = function(x) ptruncNorm(x, theta, sqrt(etaSigma), lower, upper) - (1 - alpha / 2),
+                                                  interval = c(llim, ulim))$root)))
+    }
     if(is.null(lci)) {
       lci <- llim
     }
@@ -112,5 +193,14 @@ findPolyCIlimits <- function(theta, etaSigma, lower, upper, alpha) {
 ptruncNorm <- function(mu, x, sd, l, u) {
   ptruncnorm(x, l, u, mu, sd)
 }
+
+tibBootQuantile <- function(param, theta, samp, lower, upper, c, delta) {
+  samp <- c * samp + param
+  bootcdf <- (mean(theta <= samp & samp <= upper) + delta) / (mean(lower <= samp & samp <= upper) + delta)
+  return(bootcdf)
+}
+
+
+
 
 

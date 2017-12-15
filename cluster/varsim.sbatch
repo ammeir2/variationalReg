@@ -8,8 +8,8 @@
 #SBATCH -e varsim.out
 #SBATCH --mail-type=ALL       # Type of email notification- BEGIN,END,FAIL,ALL
 #SBATCH --mail-user=amitmeir@uw.edu # Email to which notifications will be sent
-#SBATCH --array=1-250
+#SBATCH --array=1-1000
 
 module load R
 
-R CMD BATCH --no-save --no-restore "--args seed='${SLURM_ARRAY_TASK_ID}'" residuBootSim.R
+R CMD BATCH --no-save --no-restore "--args seed='${SLURM_ARRAY_TASK_ID}'" varMSsim_A.R

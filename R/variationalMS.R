@@ -28,6 +28,11 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   suffEst <- msVariationalOptim(Xsy, selectedPrecision, selectedCov, threshold)
   mvarEst <- as.numeric(XtXinv %*% suffEst)
 
+  # Computing conditionalMLE
+  mle <- exactMSmle(X, y, ysig, threshold,
+                    nsteps = 1000, stepCoef = 0.01, stepRate = 0.6,
+                    verbose = verbose)$mle
+
   # Computing Variational CI ------------------
   naivesd <- summary(naiveFit)$coefficients[, 2]
   hardthreshold <- naive - sign(naive) * naivesd * qnorm(1 - thresholdLevel)
@@ -38,9 +43,12 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
     thresholdMean <- rep(0, p)
     #thresholdMean <- as.numeric(suffStat)
     if(thresholdMethod == "poly") {
-      thresholdCoef <- mvarEst
-      polyfit <- polyhedralMS(as.numeric(suffStat), suffCov, ysig, selected, Eta = NULL, level = 1 - thresholdLevel,
-                               computeCI = FALSE)
+      thresholdCoef <- mle
+      polyfit <- polyhedralMS(y, X, as.numeric(suffStat),
+                              suffCov, ysig, selected, Eta = NULL,
+                              delta = 10^-4,
+                              computeCI = TRUE, computeBootCI = FALSE,
+                              level = 1 - cilevel)
       polypval <- polyfit$pval
       thresholdCoef[polypval > thresholdLevel] <- 0
     } else if(thresholdMethod == "naiveAdj") {
@@ -96,6 +104,8 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
 
   # Variational Cond Boot ----------------
   if(varCI) {
+    # mvarCoef <- mvarEst
+    # mvarCoef[thresholdCoef == 0] <- 0
     varBoot <- computeVarBootSample(suffSamp, selectedPrecision, selectedCov, XtXinv, threshold, verbose)
     varBootCI <- computeBootCI(varBoot, thresholdCoef, mvarEst, cilevel)
   } else {
@@ -103,13 +113,14 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
     varBoot <- NULL
   }
 
-  polyCI <- polyhedralMS(as.numeric(suffStat), suffCov, ysig, selected, Eta = NULL, level = 1 - cilevel,
-                         computeCI = TRUE)$ci
+  polyCI <- polyfit$polyCI
+  polyBootCI <- polyfit$polyBootCI
 
-  result <- list(mEst = mvarEst, naive = naive,
+  result <- list(mle = mle, mEst = mvarEst, naive = naive,
                  naiveBootCI = naiveBootCI,
                  varBootCI = varBootCI,
-                 polyCI = polyCI,
+                 polyCI = polyfit$ci,
+                 polyBootCI = polyfit$bootCI,
                  naiveBoot = naiveBoot,
                  varBoot = varBoot,
                  sampCoef = thresholdCoef,

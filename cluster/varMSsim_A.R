@@ -1,7 +1,7 @@
-library(variationalReg)
-args <- commandArgs(TRUE)
-eval(parse(text=args[[1]]))
-seed <- as.numeric(seed)
+# library(variationalReg)
+# args <- commandArgs(TRUE)
+# eval(parse(text=args[[1]]))
+# seed <- as.numeric(seed)
 
 getCover <- function(ci, truth) {
   cover <- 0
@@ -72,10 +72,9 @@ run.sim <- function(config) {
                                 varCI = TRUE))
     # fit$varBootCI <- fit$naiveBootCI
     polyCI <- fit$polyCI
+    polyBoot <- fit$polyBootCI
     mle <- NULL
-    try(mle <- exactMSmle(X, y, ysig, threshold, nsteps = 2000, stepCoef = 0.01, stepRate = 0.6,
-                      verbose = TRUE))
-    if(is.null(fit) | is.null(mle)) {
+    if(is.null(fit)) {
       m <- m - 1
       next
     }
@@ -88,8 +87,8 @@ run.sim <- function(config) {
     naivenaiveCI[, 2] <- coef(naiveFit) + qnorm(.975) * naiveSD
 
     # Computing hybrid CI -------
-    hybrid <- summary(fit, ci_types = c("poly", "naiveBoot"), ci_level = 0.05 / 2)
-    hybrid <- cbind(pmax(hybrid[[1]][, 1], hybrid[[2]][, 1]), pmin(hybrid[[1]][, 2], hybrid[[2]][, 2]))
+    # hybrid <- summary(fit, ci_types = c("poly", "naiveBoot"), ci_level = 0.05 / 2)
+    # hybrid <- cbind(pmax(hybrid[[1]][, 1], hybrid[[2]][, 1]), pmin(hybrid[[1]][, 2], hybrid[[2]][, 2]))
 
     # Split estimator ------
     indfit <- lm(ysplit ~ X[, selected] - 1)
@@ -100,12 +99,14 @@ run.sim <- function(config) {
     indCI[, 2] <- indCoef + qnorm(.975) * indSD
 
     # Reporting -----------------
-    estimates <- data.frame(naive = fit$naive, mle = mle$mle, var = fit$mEst,
+    estimates <- data.frame(naive = fit$naive, mle = fit$mle, var = fit$mEst,
                             ind = indCoef,
                             true = true[selected], projTrue = projTrue)
     cis <- list(naive = naivenaiveCI,
                 naiveBoot = fit$naiveBootCI, varBoot = fit$varBootCI,
-                hybrid = hybrid, poly = polyCI, ind = indCI)
+                poly = fit$polyCI,
+                #polyBoot = fit$polyBoot,
+                ind = indCI)
     results[[m]] <- list(config = config, estimate = estimates, cis = cis)
 
     # Evaluating ----------------
@@ -120,19 +121,19 @@ run.sim <- function(config) {
   return(results)
 }
 
-configurations <- expand.grid(n = c(200, 400, 800, 1600),
+configurations <- expand.grid(n = 200,
                               p = c(100),
-                              snr = c(0.05, 0.2, 0.8),
-                              sparsity = c(1, 2, 4),
+                              snr = 2^((-10):1),
+                              sparsity = c(1, 2, 4, 8),
                               covtype = c(2),
                               rho = c(0, 0.35, 0.7),
                               nselect = c(10),
                               reps = 1)
 set.seed(seed)
-runif(2)
-subconfig <- configurations[sample.int(nrow(configurations), 28), ]
+runif(1)
+subconfig <- configurations[sample.int(nrow(configurations), 40), ]
 results <- apply(subconfig, 1, run.sim)
-filename <- paste("results/variationalSim_G", seed, ".rds", sep = "")
+filename <- paste("results/variationalSim_H", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)
 
 
