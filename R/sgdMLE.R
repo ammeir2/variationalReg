@@ -3,7 +3,9 @@ exactMSmle <- function(X, y, ysig, threshold,
                        stepRate = 0.6,
                        meanMethod = c("zero", "plugin"),
                        nonzero = NULL, verbose = TRUE) {
-  meanMethod <- meanMethod[1]
+  if(is.character(meanMethod)) {
+    meanMethod <- meanMethod[1]
+  }
 
   p <- ncol(X)
   suffStat <- t(X) %*% y
@@ -20,7 +22,12 @@ exactMSmle <- function(X, y, ysig, threshold,
   if(is.null(nonzero)) {
     nonzero <- selected
   }
-  if(meanMethod == "plugin") {
+  if(is.numeric(meanMethod)) {
+    if(length(meanMethod) != p) {
+      stop("If mean method is numeric then it must be of size p!")
+    }
+    mu <- meanMethod
+  } else if(meanMethod == "plugin") {
     mu <- as.numeric(suffStat)
   } else if(meanMethod == "zero") {
     mu <- rep(0, p)
@@ -41,14 +48,17 @@ exactMSmle <- function(X, y, ysig, threshold,
   betahat <- naive
   estimates <- matrix(nrow = nsteps + 1, ncol = length(betahat))
   estimates[1, ] <- betahat
+  constrained <- any(nonzero != selected)
   if(verbose) {
-    print("Computing conditional MLE!")
+    if(constrained) {
+      print("Computing constrained conditional MLE!")
+    } else {
+      print("Computing conditional MLE!")
+    }
     pb <- txtProgressBar(min = 0, max = nsteps, style = 3)
   }
   for(m in 1:nsteps) {
     if(verbose) setTxtProgressBar(pb, m)
-    mu[selected] <- as.numeric(XtX %*% betahat)
-    mu[!nonzero] <- 0
     samporder <- (1:p)[order(runif(p))]
     start <- rep(0, p)
     condSamp <- mvtSampler(y = start, mu = mu,
@@ -62,6 +72,11 @@ exactMSmle <- function(X, y, ysig, threshold,
     mt <- b1 * mt + (1 - b1) * grad
     vt <- b2 * vt + (1 - b2) * grad^2
     betahat <- betahat + (mt / (1 - b1^m)) / (sqrt(vt/(1 - b2^m)) + 10^-6) * stepCoef / m^stepRate
+    mu[selected] <- as.numeric(XtX %*% betahat)
+    if(constrained) {
+      mu[!nonzero] <- 0
+      betahat <- as.numeric(XtXinv %*% mu[selected])
+    }
 
     # correcting signs
     # signs <- sign(naive)

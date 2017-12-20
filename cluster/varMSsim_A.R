@@ -69,8 +69,6 @@ run.sim <- function(config) {
     fit <- NULL
     try(fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
                                 verbose = TRUE, bootSamples = 2000,
-                                thresholdContrast = TRUE,
-                                #true = true, trueCoef = projTrue,
                                 varCI = TRUE))
     # fit$varBootCI <- fit$naiveBootCI
     polyCI <- fit$polyCI
