@@ -1,8 +1,8 @@
 exactMSmle <- function(X, y, ysig, threshold,
                        nsteps = 2000, nsamps = 4, stepCoef = 0.02,
                        stepRate = 0.6,
-                       meanMethod = c("plugin", "zero"),
-                       verbose = TRUE) {
+                       meanMethod = c("zero", "plugin"),
+                       nonzero = NULL, verbose = TRUE) {
   meanMethod <- meanMethod[1]
 
   p <- ncol(X)
@@ -15,16 +15,20 @@ exactMSmle <- function(X, y, ysig, threshold,
 
   naiveFit <- lm(y ~ Xs - 1)
   naive <- coef(naiveFit)
-
   prevGrad <- rep(0, sum(selected))
-  betahat <- naive
+
+  if(is.null(nonzero)) {
+    nonzero <- selected
+  }
   if(meanMethod == "plugin") {
     mu <- as.numeric(suffStat)
   } else if(meanMethod == "zero") {
     mu <- rep(0, p)
+    mu[selected] <- suffStat[selected]
   } else {
     stop("mean method not supported")
   }
+  betahat <- as.numeric(XtXinv %*% mu[selected])
 
   sampthreshold <- matrix(threshold, nrow = p, ncol = 2)
   sampthreshold[, 1] <- -sampthreshold[, 1]
@@ -44,6 +48,7 @@ exactMSmle <- function(X, y, ysig, threshold,
   for(m in 1:nsteps) {
     if(verbose) setTxtProgressBar(pb, m)
     mu[selected] <- as.numeric(XtX %*% betahat)
+    mu[!nonzero] <- 0
     samporder <- (1:p)[order(runif(p))]
     start <- rep(0, p)
     condSamp <- mvtSampler(y = start, mu = mu,

@@ -1,7 +1,7 @@
-library(variationalReg)
-args <- commandArgs(TRUE)
-eval(parse(text=args[[1]]))
-seed <- as.numeric(seed)
+# library(variationalReg)
+# args <- commandArgs(TRUE)
+# eval(parse(text=args[[1]]))
+# seed <- as.numeric(seed)
 
 getCover <- function(ci, truth) {
   cover <- 0
@@ -68,7 +68,7 @@ run.sim <- function(config) {
     # Estimating --------------
     fit <- NULL
     try(fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
-                                verbose = FALSE, bootSamples = 2000,
+                                verbose = TRUE, bootSamples = 2000,
                                 thresholdContrast = TRUE,
                                 #true = true, trueCoef = projTrue,
                                 varCI = TRUE))
