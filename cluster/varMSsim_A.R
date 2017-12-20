@@ -1,7 +1,7 @@
-# library(variationalReg)
-# args <- commandArgs(TRUE)
-# eval(parse(text=args[[1]]))
-# seed <- as.numeric(seed)
+library(variationalReg)
+args <- commandArgs(TRUE)
+eval(parse(text=args[[1]]))
+seed <- as.numeric(seed)
 
 getCover <- function(ci, truth) {
   cover <- 0
@@ -45,6 +45,7 @@ run.sim <- function(config) {
   m <- 0
   while(m < reps) {
     m <- m + 1
+    print(c(m = m, config))
     # Generating Data ------------
     X <- matrix(rnorm(n * p), ncol = p)
     X <- X %*% sqrtsig
@@ -67,7 +68,8 @@ run.sim <- function(config) {
     # Estimating --------------
     fit <- NULL
     try(fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
-                                verbose = TRUE, bootSamples = 2000,
+                                verbose = FALSE, bootSamples = 2000,
+                                thresholdContrast = TRUE,
                                 #true = true, trueCoef = projTrue,
                                 varCI = TRUE))
     # fit$varBootCI <- fit$naiveBootCI
@@ -110,7 +112,6 @@ run.sim <- function(config) {
     results[[m]] <- list(config = config, estimate = estimates, cis = cis)
 
     # Evaluating ----------------
-    print(c(m = m, config))
     coverage <- coverage * (m - 1) / m + sapply(cis, getCover, projTrue) / m
     print(coverage)
     mse <- mse * (m - 1)/m  + apply(estimates[, -(5:6)], 2, function(x) sqrt(mean((x - projTrue)^2)))/m
@@ -124,16 +125,18 @@ run.sim <- function(config) {
 configurations <- expand.grid(n = 200,
                               p = c(100),
                               snr = 2^((-10):1),
+                              # snr = c(0.25, 0.5, 1, 2),
                               sparsity = c(1, 2, 4, 8),
                               covtype = c(2),
                               rho = c(0, 0.35, 0.7),
+                              # rho = c(0.7),
                               nselect = c(10),
                               reps = 1)
 set.seed(seed)
-runif(1)
+runif(4)
 subconfig <- configurations[sample.int(nrow(configurations), 40), ]
 results <- apply(subconfig, 1, run.sim)
-filename <- paste("results/variationalSim_H", seed, ".rds", sep = "")
+filename <- paste("results/variationalSim_univZ_A", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)
 
 

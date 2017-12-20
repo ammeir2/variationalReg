@@ -68,8 +68,17 @@ polyhedralMS <- function(y, X, suffStat, suffCov, ysig, selected, Eta = NULL, le
     theta <- as.numeric(t(eta) %*% suffStat)
     minusSusbset <- alpha < 0
     plusSubset <- alpha > 0
-    Vminus <- max((-Ay[minusSusbset] + alpha[minusSusbset] * theta) / alpha[minusSusbset])
-    Vplus <- min((-Ay[plusSubset] + alpha[plusSubset] * theta) / alpha[plusSubset])
+    if(any(minusSusbset)) {
+      Vminus <- max((-Ay[minusSusbset] + alpha[minusSusbset] * theta) / alpha[minusSusbset])
+    } else {
+      Vminus <- -Inf
+    }
+
+    if(any(plusSubset)) {
+      Vplus <- min((-Ay[plusSubset] + alpha[plusSubset] * theta) / alpha[plusSubset])
+    } else {
+      Vplus <- Inf
+    }
     if(computeCI) polyCI[i, ] <- findPolyCIlimits(y, theta, eta, etaSigma, Vminus, Vplus, 1 - level, boot = FALSE)
     if(computeBootCI) {
       if(verbose) setTxtProgressBar(pb, i)

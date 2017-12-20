@@ -3,7 +3,7 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
                                  thresholdLevel = 0.01, cilevel = 0.05,
                                  true = NULL, trueCoef = NULL, varCI = TRUE,
                                  bootSamples = 2000,
-                                 verbose = TRUE) {
+                                 verbose = TRUE, thresholdContrast = FALSE) {
   # Variational Estimate --------------------
   p <- ncol(X)
   suffStat <- t(X) %*% y
@@ -41,16 +41,29 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   if(is.null(trueCoef)) {
     thresholdMethod <- thresholdMethod[1]
     thresholdMean <- rep(0, p)
-    #thresholdMean <- as.numeric(suffStat)
     if(thresholdMethod == "poly") {
-      thresholdCoef <- mle
       polyfit <- polyhedralMS(y, X, as.numeric(suffStat),
                               suffCov, ysig, selected, Eta = NULL,
                               delta = 10^-4,
                               computeCI = TRUE, computeBootCI = FALSE,
                               level = 1 - cilevel)
-      polypval <- polyfit$pval
-      thresholdCoef[polypval > thresholdLevel] <- 0
+      if(!thresholdContrast) {
+        thresholdCoef <- mle
+        polypval <- polyfit$pval
+        thresholdCoef[polypval > thresholdLevel] <- 0
+      } else {
+        mleMean <- as.numeric(XtX %*% mle)
+        Eta <- matrix(0, ncol = sum(selected), nrow = p)
+        Eta[selected, ] <- diag(sum(selected))
+        # contrastpval <- polyhedralMS(y, X, as.numeric(suffStat),
+        #                              suffCov, ysig, selected, Eta = Eta,
+        #                              computeCI = FALSE, computeBootCI = FALSE)$pval
+        contrastpval <- univariateScreenPval(suffStat, suffCov, selected, threshold)
+        contrastpval[is.nan(contrastpval)] <- 0
+        mleMean[contrastpval > thresholdLevel] <- 0
+        # print(mean(contrastpval < thresholdLevel))
+        thresholdCoef <- XtXinv %*% mleMean
+      }
     } else if(thresholdMethod == "naiveAdj") {
       hardthreshold <- naive - sign(naive) * naivesd * qnorm(1 - thresholdLevel)
       thresholdCoef <- mvarEst
@@ -95,8 +108,15 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   suffSamp <- condSamp[, selected]
   naiveBoot <- suffSamp %*% XtXinv
   if(is.null(true)) {
-    thresholdedNaive <- naive
-    thresholdedNaive[thresholdCoef == 0] <- 0
+    if(thresholdContrast) {
+      # thresholdedNaive <- suffStat[selected]
+      # thresholdedNaive[mleMean == 0] <- 0
+      # thresholdedNaive <- XtXinv %*% thresholdedNaive
+      thresholdedNaive <- thresholdCoef
+    } else {
+      thresholdedNaive <- naive
+      thresholdedNaive[thresholdCoef == 0] <- 0
+    }
   } else {
     thresholdedNaive <- trueCoef
   }
@@ -153,10 +173,10 @@ compSuffMeanLoglikM <- function(mean, suffStat, suffPrecision, suffCov, threshol
 
 compMloglik <- function(param, y, Xs, ysig, suffCov, threshold) {
   yhat <- as.numeric(Xs %*% param)
-  dens <- sum(dnorm(y, yhat, ysig, log = TRUE))
-
+  # dens <- sum(dnorm(y, yhat, ysig, log = TRUE))
   suffMu <- as.numeric(suffCov %*% param) / ysig^2
   sds <- sqrt(diag(suffCov))
+  dens <- sum(dnorm(as.numeric(t(Xs) %*% y), suffMu, sds, log = TRUE))
   prob <- pnorm(-threshold, suffMu, sds) + pnorm(threshold, suffMu, sds, lower.tail = FALSE)
   return(-dens + sum(log(prob)))
 }
@@ -196,6 +216,17 @@ computeNaiveCI <- function(suffStat, suffCov, selected, ysig, level) {
   ci[, 2] <- coef + quant * diag(coefcov)
   return(ci)
 }
+
+
+univariateScreenPval <- function(suffStat, suffCov, selected, threshold) {
+  y <- suffStat[selected]
+  sds <- sqrt(diag(suffCov))[selected]
+  pselect <- pnorm(-threshold, mean = 0, sd = sds, lower.tail = TRUE)
+  pselect <- pselect + pnorm(threshold, mean = 0, sd = sds, lower.tail = FALSE)
+  prange <- 2* pnorm(-abs(y), mean = 0, sd = sds)
+  return(prange / pselect)
+}
+
 
 
 

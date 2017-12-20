@@ -1,0 +1,94 @@
+
+R version 3.3.1 (2016-06-21) -- "Bug in Your Hair"
+Copyright (C) 2016 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> library(variationalReg)
+> args <- commandArgs(TRUE)
+> eval(parse(text=args[[1]]))
+> seed <- as.numeric(seed)
+> 
+> getCover <- function(ci, truth) {
++   cover <- 0
++   for(i in 1:length(truth)) {
++     if(ci[i, 1] < truth[i] & ci[i, 2] > truth[i]) {
++       cover <- cover + 1
++     } else {
++       #cat(i, " ")
++     }
++   }
++   return(cover / length(truth))
++ }
+> 
+> run.sim <- function(config) {
++   # Getting variables ---------
++   p <- config[["p"]]
++   n <- config[["n"]]
++   nselect <- config[["nselect"]]
++   snr <- config[["snr"]]
++   sparsity <- config[["sparsity"]]
++   reps <- config[["reps"]]
++   covtype <- config[["covtype"]]
++   rho <- config[["rho"]]
++ 
++   # Setting up X covariance --------
++   if(covtype == 1) {
++     sqrtsig <- diag(p)
++   } else if(covtype == 2) {
++     sigma <- rho^as.matrix(dist(1:p))
++     sqrtsig <- expm::sqrtm(sigma)
++   } else if(covtype == 3) {
++     rho <- 0.3
++     sigma <- matrix(rho, nrow = p, ncol = p)
++     diag(sigma) <- 1
++     sqrtsig <- expm::sqrtm(sigma)
++   }
++ 
++   results <- vector("list", reps)
++   coverage <- 0
++   mse <- 0
++   m <- 0
++   while(m < reps) {
++     m <- m + 1
++     print(c(m = m, config))
++     # Generating Data ------------
++     X <- matrix(rnorm(n * p), ncol = p)
++     X <- X %*% sqrtsig
++     X <- scale(X)
++     true <- rep(0, p)
++     nonzero <- sample.int(p, sparsity)
++     true[nonzero] <- (1 - 2 * rbinom(sparsity, 1, 0.5)) * rexp(sparsity)
++     true <- true / sum(abs(true))
++     trueCoef <- true
++     mu <- as.numeric(X %*% true)
++     ysig <- sqrt(var(mu) / snr)
++     y <- mu + rnorm(n, sd = ysig)
++     y <- y - mean(y)
++     suffStat <- t(X) %*% y
++     threshold <- mean(sort(abs(suffStat), decreasing = TRUE)[nselect:(nselect + 1)])
++     selected <- abs(suffStat) > threshold
++     projTrue <- round(coef(lm(mu ~ X[, selected] - 1)), 6)
++     ysplit <- (mu + rnorm(n, sd = ysig)) - mean(y)
++ 
++     # Estimating --------------
++     fit <- NULL
++     try(fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
++                                 verbose = FALSE = TRUE, bootSamples = 2000,
+Error: unexpected '=' in:
+"    try(fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
+                                verbose = FALSE ="
+Execution halted

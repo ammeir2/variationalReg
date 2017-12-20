@@ -96,7 +96,7 @@ run.sim <- function(config) {
     nsamps <- 1000
     precision <- solve(t(X) %*% X * ysig^2)
     fit <- residualConditionalBootstrap(X, y, ysig, selected = NULL,
-                                        cilevel = 0.05, thresholdLevel = pthreshold^2/p,
+                                        cilevel = 0.05, thresholdLevel = 0.01 * pthreshold/p,
                                         bootSamples = nsamps, verbose = FALSE,
                                         sampCoef = NULL,
                                         precision = solve(XtX * ysig^2), testLevel = pthreshold)
@@ -159,7 +159,7 @@ configurations <- expand.grid(n = c(100),
 set.seed(seed)
 runif(10)
 results <- apply(configurations, 1, run.sim)
-filename <- paste("results/variationalSimAgg_C", seed, ".rds", sep = "")
+filename <- paste("results/variationalSimAgg_D", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)
 
 

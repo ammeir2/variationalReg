@@ -10,9 +10,10 @@ getCover <- function(ci, truth) {
   return(cover / length(truth))
 }
 
-filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_H_*"))
+# filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_H_*"))
+filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_contrastZ_A_*"))
 filenames <- lapply(filenames, function(x) paste0('simulations/results/', x))[-c(3, 4)]
-results <- lapply(filenames, function(x) readRDS(x))
+results <- lapply(filenames, function(x) try(readRDS(x)))
 results <- do.call("c", results)
 results <- do.call("c", results)
 
@@ -35,8 +36,8 @@ msedat <- summarize(group_by(msedat, n, p, snr, sparsity, covtype, nselect, type
                     sd = sd(rmse, na.rm = TRUE) / sqrt(length(rmse)) ,
                     rmse = mean(rmse, na.rm = TRUE))
 ggplot(subset(msedat, covtype == 2)) +
-  geom_point(aes(x = log2(n), y = rmse, col = type, shape = type)) +
-  geom_line(aes(x = log2(n), y = rmse, col = type, linetype = type)) +
+  geom_point(aes(x = log2(snr), y = rmse, col = type, shape = type)) +
+  geom_line(aes(x = log2(snr), y = rmse, col = type, linetype = type)) +
   facet_grid(rho ~ sparsity, labeller = "label_both") + theme_bw()
 
 # Rel MSE -------
@@ -55,20 +56,20 @@ names(relmsedat)[8:9] <- c("type", "rmse")
 relmsedat <- summarize(group_by(relmsedat, n, p, snr, sparsity, covtype, nselect, type, rho),
                     sd = sd(rmse, na.rm = TRUE) / sqrt(length(rmse)) ,
                     rmse = mean(rmse, na.rm = TRUE))
-ggplot(subset(relmsedat, covtype == 2)) +
-  geom_line(aes(x = log2(n), y = rmse, col = type, linetype = type)) +
-  geom_point(aes(x = log2(n), y = rmse, col = type, shape = type)) +
+ggplot(subset(relmsedat, covtype == 2 & snr != 0.01)) +
+  geom_line(aes(x = log2(snr), y = rmse, col = type, linetype = type)) +
+  geom_point(aes(x = log2(snr), y = rmse, col = type, shape = type)) +
   facet_grid(rho ~ sparsity, labeller = "label_both") + theme_bw() +
   geom_hline(yintercept = 0) +
-  geom_segment(aes(x = log2(n), xend = log2(n), y = rmse - 2*sd, yend = rmse + 2*sd,
+  geom_segment(aes(x = log2(snr), xend = log2(snr), y = rmse - 2*sd, yend = rmse + 2*sd,
                    linetype = type, col = type)) +
   ylab("Relative MSE") + xlab("log2(sample size)")
 
 # Cover ---
 computeCover <- function(x) {
   cis <- x$cis
-  naive <- x$cis$naive
-  cis[2:3] <- lapply(cis[2:3], function(x) cbind(pmin(x[, 1], naive[, 1]), pmax(x[, 2], naive[, 2])))
+  # naive <- x$cis$naive
+  # cis[2:3] <- lapply(cis[2:3], function(x) cbind(pmin(x[, 1], naive[, 1]), pmax(x[, 2], naive[, 2])))
   x$cis <- cis
 
   cover <- sapply(x$cis[-6], getCover, x$estimate[, 5])
@@ -83,18 +84,18 @@ names(coverdat)[8:9] <- c("type", "cover")
 coverdat <- summarize(group_by(coverdat, n, p, snr, sparsity, covtype, nselect, type, rho),
                     sd = sd(cover, na.rm = TRUE) / sqrt(length(cover)) ,
                     cover = mean(cover, na.rm = TRUE))
-ggplot(subset(coverdat, covtype == 2)) +
-  geom_line(aes(x = log2(n), y = cover, col = type, linetype = type)) +
+ggplot(subset(coverdat, covtype == 2 & snr != 0.01 & snr <= 1)) +
+  geom_line(aes(x = log2(snr), y = cover, col = type, linetype = type)) +
   facet_grid(rho ~ sparsity, labeller = "label_both") + theme_bw() +
-  geom_segment(aes(x = log2(n), xend = log2(n), col = type,
+  geom_segment(aes(x = log2(snr), xend = log2(snr), col = type,
                    y = cover + 2 * sd, yend = cover - 2*sd)) +
-  geom_hline(yintercept = 0.95) + ylim(0.85, 1)
+  geom_hline(yintercept = 0.95)
 
 # Power ---
 computePower <- function(x) {
   cis <- x$cis
-  naive <- x$cis$naive
-  cis[2:3] <- lapply(cis[2:3], function(x) cbind(pmin(x[, 1], naive[, 1]), pmax(x[, 2], naive[, 2])))
+  # naive <- x$cis$naive
+  # cis[2:3] <- lapply(cis[2:3], function(x) cbind(pmin(x[, 1], naive[, 1]), pmax(x[, 2], naive[, 2])))
   x$cis <- cis
 
   nonzero <- x$estimate$true != 0
@@ -107,7 +108,9 @@ computePower <- function(x) {
   result <- c(x$config, power)
   return(result)
 }
-powerdat <- t(sapply(results, computePower))
+powerdat <- lapply(results, computePower)
+# powerdat <- powerdat[-which(sapply(powerdat, length) == 14)]
+powerdat <- do.call("rbind", powerdat)
 powerdat <- data.frame(powerdat)
 powerdat$reps <- NULL
 powerdat <- melt(powerdat, id = c("n", "p", "snr", "sparsity", "covtype", "nselect", "rho"))
@@ -115,12 +118,12 @@ names(powerdat)[8:9] <- c("type", "power")
 powerdat <- summarize(group_by(powerdat, n, p, snr, sparsity, covtype, nselect, type, rho),
                       sd = sd(power, na.rm = TRUE) / sqrt(length(power)) ,
                       power = mean(power, na.rm = TRUE))
-ggplot(subset(powerdat, covtype == 2)) +
-  geom_line(aes(x = log2(n), y = power, col = type, linetype = type)) +
-  geom_point(aes(x = log2(n), y = power, col = type, shape = type)) +
+ggplot(subset(powerdat, snr != 0.01 & snr <= 2)) +
+  geom_line(aes(x = log2(snr), y = power, col = type, linetype = type)) +
+  geom_point(aes(x = log2(snr), y = power, col = type, shape = type)) +
   facet_grid(rho ~ sparsity, labeller = "label_both", scales = "free_y") +
   theme_bw() +
-  geom_segment(aes(x = log2(n), xend = log2(n), col = type, linetype = type,
+  geom_segment(aes(x = log2(snr), xend = log2(snr), col = type, linetype = type,
                    y = power + 2 * sd, yend = power - 2*sd)) +
   ylim(0, 1)
 
@@ -128,16 +131,18 @@ ggplot(subset(powerdat, covtype == 2)) +
 # Size -----
 computeSize <- function(x) {
   cis <- x$cis
-  naive <- x$cis$naive
-  cis[2:3] <- lapply(cis[2:3], function(x) cbind(pmin(x[, 1], naive[, 1]), pmax(x[, 2], naive[, 2])))
+  # naive <- x$cis$naive
+  # cis[2:3] <- lapply(cis[2:3], function(x) cbind(pmin(x[, 1], naive[, 1]), pmax(x[, 2], naive[, 2])))
   x$cis <- cis
 
-  size <- sapply(x$cis, function(x) mean(x[, 2] - x[, 1]))
+  size <- sapply(x$cis, function(x) median(x[, 2] - x[, 1]))
   size <- log2(size[-1] / size[1])
   result <- c(x$config, size)
   return(result)
 }
-sizedat <- t(sapply(results, computeSize))
+sizedat <- lapply(results, computeSize)
+# sizedat <- sizedat[-which(sapply(sizedat, length) == 13)]
+sizedat <- do.call("rbind", sizedat)
 sizedat <- data.frame(sizedat)
 sizedat$reps <- NULL
 sizedat <- melt(sizedat, id = c("n", "p", "snr", "sparsity", "covtype", "nselect", "rho"))
@@ -145,11 +150,11 @@ names(sizedat)[8:9] <- c("type", "relsize")
 sizedat <- summarize(group_by(sizedat, n, p, snr, sparsity, covtype, nselect, type, rho),
                       sd = sd(relsize, na.rm = TRUE) / sqrt(length(relsize)) ,
                       relsize = mean(relsize, na.rm = TRUE))
-ggplot(subset(sizedat, covtype == 2)) +
-  geom_line(aes(x = log2(n), y = relsize, col = type, linetype = type)) +
-  geom_point(aes(x = log2(n), y = relsize, col = type, shape = type)) +
+ggplot(subset(sizedat, snr != 0.01 & snr <= 2 & type != "ind")) +
+  geom_line(aes(x = log2(snr), y = relsize, col = type, linetype = type)) +
+  geom_point(aes(x = log2(snr), y = relsize, col = type, shape = type)) +
   facet_grid(rho ~ sparsity, labeller = "label_both") + theme_bw() +
-  geom_segment(aes(x = log2(n), xend = log2(n), col = type, linetype = type,
+  geom_segment(aes(x = log2(snr), xend = log2(snr), col = type, linetype = type,
                    y = relsize + 2 * sd, yend = relsize - 2*sd)) +
   geom_hline(yintercept = 0)
 
