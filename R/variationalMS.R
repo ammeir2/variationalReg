@@ -2,7 +2,8 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
                                  thresholdLevel = 0.01, cilevel = 0.05,
                                  varCI = TRUE,
                                  bootSamples = 2000,
-                                 verbose = TRUE) {
+                                 verbose = TRUE,
+                                 computeMLE = TRUE) {
   # Variational Estimate --------------------
   p <- ncol(X)
   suffStat <- t(X) %*% y
@@ -28,9 +29,13 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   mvarEst <- as.numeric(XtXinv %*% suffEst)
 
   # Computing conditionalMLE
-  mle <- exactMSmle(X, y, ysig, threshold,
-                    nsteps = 1000, stepCoef = 0.01, stepRate = 0.6,
-                    verbose = verbose)$mle
+  if(computeMLE) {
+    mle <- exactMSmle(X, y, ysig, threshold,
+                      nsteps = 1000, stepCoef = 0.01, stepRate = 0.6,
+                      verbose = verbose)$mle
+  } else {
+    mle <- NULL
+  }
 
   # Polyhedral fit ----
   polyfit <- polyhedralMS(y, X, as.numeric(suffStat),
@@ -38,31 +43,33 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
                           delta = 10^-4,
                           computeCI = TRUE, computeBootCI = FALSE,
                           level = 1 - cilevel)
-  # Eta <- matrix(0, ncol = sum(selected), nrow = p)
-  # Eta[selected, ] <- diag(sum(selected))
-  # contrastpval <- polyhedralMS(y, X, as.numeric(suffStat),
-  #                              suffCov, ysig, selected, Eta = Eta,
-  #                              computeCI = FALSE, computeBootCI = FALSE)$pval
-
 
   # Computing Variational CI ------------------
   naivesd <- summary(naiveFit)$coefficients[, 2]
   contrastpval <- univariateScreenPval(suffStat, suffCov, selected, threshold)
   contrastpval[is.nan(contrastpval)] <- 0
   thresholdMean <- rep(0, p)
-  mleMean <- as.numeric(XtX %*% mle)
+  if(computeMLE) {
+    mleMean <- as.numeric(XtX %*% mle)
+  } else {
+    mleMean <- as.numeric(XtX %*% naive)
+  }
   mleMean[contrastpval > thresholdLevel] <- 0
   thresholdMean[selected] <- mleMean
   if(any(thresholdMean != 0)) {
-    thresholdCoef <- exactMSmle(X, y, ysig, threshold,
-                                nsteps = 250,
-                                stepCoef = 0.01, stepRate = 0.6,
-                                meanMethod = thresholdMean,
-                                verbose = verbose, nonzero = thresholdMean != 0)$mle
+    if(computeMLE) {
+      thresholdCoef <- exactMSmle(X, y, ysig, threshold,
+                                  nsteps = 500,
+                                  stepCoef = 0.01, stepRate = 0.6,
+                                  meanMethod = thresholdMean,
+                                  verbose = verbose, nonzero = thresholdMean != 0)$mle
+      thresholdMean[selected] <- XtX %*% thresholdCoef
+    } else {
+      thresholdCoef <- as.numeric(XtXinv %*% thresholdMean[selected])
+    }
   } else {
     thresholdCoef <- rep(0, sum(selected))
   }
-  thresholdMean[selected] <- XtX %*% thresholdCoef
 
   # Sampling -----
   sampthreshold <- matrix(threshold, nrow = p, ncol = 2)
@@ -102,10 +109,12 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
 
   # Variational Cond Boot ----------------
   if(varCI) {
-    # mvarCoef <- mvarEst
-    # mvarCoef[thresholdCoef == 0] <- 0
     varBoot <- computeVarBootSample(suffSamp, selectedPrecision, selectedCov, XtXinv, threshold, verbose)
     varBootCI <- computeBootCI(varBoot, thresholdCoef, mvarEst, cilevel)
+    # bootVarCoef <-  XtX %*% mvarEst
+    # bootVarCoef[contrastpval > thresholdLevel] <- 0
+    # bootVarCoef <- as.numeric(XtXinv %*% bootVarCoef)
+    # varBootCI <- computeBootCI(varBoot, bootVarCoef, mvarEst, cilevel)
   } else {
     varBootCI <- NULL
     varBoot <- NULL

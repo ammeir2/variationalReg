@@ -2,7 +2,7 @@
 # args <- commandArgs(TRUE)
 # eval(parse(text=args[[1]]))
 # seed <- as.numeric(seed)
-
+#
 getCover <- function(ci, truth) {
   cover <- 0
   for(i in 1:length(truth)) {
@@ -66,15 +66,20 @@ run.sim <- function(config) {
     ysplit <- (mu + rnorm(n, sd = ysig)) - mean(y)
 
     # Estimating --------------
-    fit <- NULL
-    try(fit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
-                                verbose = TRUE, bootSamples = 2000,
-                                varCI = TRUE))
+    condfit <- NULL
+    nbfit <- NULL
+    try(nbfit <- approxConditionalMLE(X, y, ysig, threshold,
+                                      thresholdLevel = 0.01 / nselect,
+                                      verbose = TRUE, bootSamples = 2000,
+                                      varCI = TRUE, computeMLE = FALSE))
+    try(condfit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
+                                        verbose = TRUE, bootSamples = 2000,
+                                        varCI = FALSE))
     # fit$varBootCI <- fit$naiveBootCI
-    polyCI <- fit$polyCI
-    polyBoot <- fit$polyBootCI
+    polyCI <- condfit$polyCI
+    # polyBoot <- fit$polyBootCI
     mle <- NULL
-    if(is.null(fit)) {
+    if(is.null(condfit) | is.null(nbfit)) {
       m <- m - 1
       next
     }
@@ -99,13 +104,14 @@ run.sim <- function(config) {
     indCI[, 2] <- indCoef + qnorm(.975) * indSD
 
     # Reporting -----------------
-    estimates <- data.frame(naive = fit$naive, mle = fit$mle, var = fit$mEst,
+    estimates <- data.frame(naive = condfit$naive, mle = condfit$mle, var = condfit$mEst,
                             ind = indCoef,
                             true = true[selected], projTrue = projTrue)
     cis <- list(naive = naivenaiveCI,
-                naiveBoot = fit$naiveBootCI, varBoot = fit$varBootCI,
-                poly = fit$polyCI,
-                #polyBoot = fit$polyBoot,
+                naiveBoot = condfit$naiveBootCI,
+                varBoot = nbfit$varBootCI,
+                poly = condfit$polyCI,
+                nnboot = nbfit$naiveBootCI,
                 ind = indCI)
     results[[m]] <- list(config = config, estimate = estimates, cis = cis)
 
@@ -122,19 +128,20 @@ run.sim <- function(config) {
 
 configurations <- expand.grid(n = 200,
                               p = c(100),
-                              snr = 2^((-10):1),
-                              # snr = c(0.25, 0.5, 1, 2),
-                              sparsity = c(1, 2, 4, 8),
+                              # snr = 2^((-10):0),
+                              snr = 2^(seq(from = -10, to = 0, by = 2)),
+                              # sparsity = c(1, 2, 4, 8),
+                              sparsity = c(2, 8),
                               covtype = c(2),
-                              rho = c(0, 0.35, 0.7),
-                              # rho = c(0.7),
+                              # rho = c(0, 0.35, 0.7),
+                              rho = c(0, 0.7),
                               nselect = c(10),
                               reps = 1)
 set.seed(seed)
-runif(4)
-subconfig <- configurations[sample.int(nrow(configurations), 40), ]
+runif(2)
+subconfig <- configurations[sample.int(nrow(configurations), 5), ]
 results <- apply(subconfig, 1, run.sim)
-filename <- paste("results/variationalSim_univZ_A", seed, ".rds", sep = "")
+filename <- paste("results/variationalSim_univConstZ_B", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)
 
 
