@@ -2,7 +2,7 @@
 # args <- commandArgs(TRUE)
 # eval(parse(text=args[[1]]))
 # seed <- as.numeric(seed)
-#
+
 getCover <- function(ci, truth) {
   cover <- 0
   for(i in 1:length(truth)) {
@@ -66,20 +66,14 @@ run.sim <- function(config) {
     ysplit <- (mu + rnorm(n, sd = ysig)) - mean(y)
 
     # Estimating --------------
-    condfit <- NULL
     nbfit <- NULL
     try(nbfit <- approxConditionalMLE(X, y, ysig, threshold,
                                       thresholdLevel = 0.01 / nselect,
                                       verbose = TRUE, bootSamples = 2000,
-                                      varCI = TRUE, computeMLE = FALSE))
-    try(condfit <- approxConditionalMLE(X, y, ysig, threshold, thresholdLevel = 0.01 / nselect,
-                                        verbose = TRUE, bootSamples = 2000,
-                                        varCI = FALSE))
-    # fit$varBootCI <- fit$naiveBootCI
-    polyCI <- condfit$polyCI
-    # polyBoot <- fit$polyBootCI
+                                      varCI = TRUE, computeMLE = TRUE))
+    polyCI <- nbfit$polyCI
     mle <- NULL
-    if(is.null(condfit) | is.null(nbfit)) {
+    if(is.null(nbfit)) {
       m <- m - 1
       next
     }
@@ -91,10 +85,6 @@ run.sim <- function(config) {
     naivenaiveCI[, 1] <- coef(naiveFit) - qnorm(.975) * naiveSD
     naivenaiveCI[, 2] <- coef(naiveFit) + qnorm(.975) * naiveSD
 
-    # Computing hybrid CI -------
-    # hybrid <- summary(fit, ci_types = c("poly", "naiveBoot"), ci_level = 0.05 / 2)
-    # hybrid <- cbind(pmax(hybrid[[1]][, 1], hybrid[[2]][, 1]), pmin(hybrid[[1]][, 2], hybrid[[2]][, 2]))
-
     # Split estimator ------
     indfit <- lm(ysplit ~ X[, selected] - 1)
     indCoef <- coef(indfit)
@@ -104,14 +94,13 @@ run.sim <- function(config) {
     indCI[, 2] <- indCoef + qnorm(.975) * indSD
 
     # Reporting -----------------
-    estimates <- data.frame(naive = condfit$naive, mle = condfit$mle, var = condfit$mEst,
+    estimates <- data.frame(naive = nbfit$naive, mle = nbfit$mle, var = nbfit$mEst,
                             ind = indCoef,
                             true = true[selected], projTrue = projTrue)
     cis <- list(naive = naivenaiveCI,
-                naiveBoot = condfit$naiveBootCI,
+                naiveBoot = nbfit$naiveBootCI,
                 varBoot = nbfit$varBootCI,
-                poly = condfit$polyCI,
-                nnboot = nbfit$naiveBootCI,
+                poly = nbfit$polyCI,
                 ind = indCI)
     results[[m]] <- list(config = config, estimate = estimates, cis = cis)
 
@@ -129,7 +118,7 @@ run.sim <- function(config) {
 configurations <- expand.grid(n = 200,
                               p = c(100),
                               # snr = 2^((-10):0),
-                              snr = 2^(seq(from = -10, to = 0, by = 2)),
+                              snr = 2^(seq(from = -10, to = 1, by = 2)),
                               # sparsity = c(1, 2, 4, 8),
                               sparsity = c(2, 8),
                               covtype = c(2),
@@ -139,9 +128,9 @@ configurations <- expand.grid(n = 200,
                               reps = 1)
 set.seed(seed)
 runif(2)
-subconfig <- configurations[sample.int(nrow(configurations), 5), ]
+subconfig <- configurations[sample.int(nrow(configurations), 6), ]
 results <- apply(subconfig, 1, run.sim)
-filename <- paste("results/variationalSim_univConstZ_B", seed, ".rds", sep = "")
+filename <- paste("results/variationalSim_univConstZ_C", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)
 
 

@@ -17,11 +17,6 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   naive <- coef(naiveFit)
   suffPrecision <- solve(suffCov)
 
-  # mvarEst <- optim(par = naive, fn = compMloglik,
-  #                  method = "Nelder-Mead",
-  #                  y = y, Xs = Xs, ysig = ysig, suffCov = suffCov,
-  #                  threshold = threshold)
-
   Xsy <- as.numeric(suffStat[selected, ])
   selectedCov <- XtX * ysig^2
   selectedPrecision <- XtXinv / ysig^2
@@ -49,24 +44,11 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   contrastpval <- univariateScreenPval(suffStat, suffCov, selected, threshold)
   contrastpval[is.nan(contrastpval)] <- 0
   thresholdMean <- rep(0, p)
-  if(computeMLE) {
-    mleMean <- as.numeric(XtX %*% mle)
-  } else {
-    mleMean <- as.numeric(XtX %*% naive)
-  }
+  mleMean <- suffStat[selected]
   mleMean[contrastpval > thresholdLevel] <- 0
   thresholdMean[selected] <- mleMean
-  if(any(thresholdMean != 0)) {
-    if(computeMLE) {
-      thresholdCoef <- exactMSmle(X, y, ysig, threshold,
-                                  nsteps = 500,
-                                  stepCoef = 0.01, stepRate = 0.6,
-                                  meanMethod = thresholdMean,
-                                  verbose = verbose, nonzero = thresholdMean != 0)$mle
-      thresholdMean[selected] <- XtX %*% thresholdCoef
-    } else {
-      thresholdCoef <- as.numeric(XtXinv %*% thresholdMean[selected])
-    }
+  if(any(contrastpval < thresholdLevel)) {
+    thresholdCoef <- as.numeric(XtXinv %*% thresholdMean[selected])
   } else {
     thresholdCoef <- rep(0, sum(selected))
   }
@@ -96,7 +78,6 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   }
   if(verbose) close(pb)
   condSamp <- do.call("rbind", samples)
-  # print(apply(condSamp[, selected], 2, function(x) min(mean(x < 0), mean(x > 0))))
   for(i in 1:ncol(condSamp)) {
     condSamp[, i] <- condSamp[, i] * sqrt(diagvar[i])
   }
@@ -104,17 +85,12 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   # Naive Cond Boot -----------------
   suffSamp <- condSamp[, selected]
   naiveBoot <- suffSamp %*% XtXinv
-  thresholdedNaive <- thresholdCoef
-  naiveBootCI <- computeBootCI(naiveBoot, thresholdedNaive, naive, cilevel)
+  naiveBootCI <- computeBootCI(naiveBoot, thresholdCoef, naive, cilevel)
 
   # Variational Cond Boot ----------------
   if(varCI) {
     varBoot <- computeVarBootSample(suffSamp, selectedPrecision, selectedCov, XtXinv, threshold, verbose)
     varBootCI <- computeBootCI(varBoot, thresholdCoef, mvarEst, cilevel)
-    # bootVarCoef <-  XtX %*% mvarEst
-    # bootVarCoef[contrastpval > thresholdLevel] <- 0
-    # bootVarCoef <- as.numeric(XtXinv %*% bootVarCoef)
-    # varBootCI <- computeBootCI(varBoot, bootVarCoef, mvarEst, cilevel)
   } else {
     varBootCI <- NULL
     varBoot <- NULL

@@ -13,7 +13,7 @@ getCover <- function(ci, truth) {
 # filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_H_*"))
 # filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_contrastZ_A_*"))
 # filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_univZ_A_*"))
-filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_univConstZ_B_*"))
+filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_univConstZ_C_*"))
 filenames <- lapply(filenames, function(x) paste0('simulations/results/', x))[-c(3, 4)]
 results <- lapply(filenames, function(x) try(readRDS(x)))
 results <- do.call("c", results)
