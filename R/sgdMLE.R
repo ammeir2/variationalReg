@@ -47,6 +47,7 @@ exactMSmle <- function(X, y, ysig, threshold,
   vt <- 0
   betahat <- naive
   estimates <- matrix(nrow = nsteps + 1, ncol = length(betahat))
+  samples <- matrix(nrow = nsteps, ncol = p)
   estimates[1, ] <- betahat
   constrained <- any(nonzero != selected)
   if(verbose) {
@@ -57,6 +58,7 @@ exactMSmle <- function(X, y, ysig, threshold,
     }
     pb <- txtProgressBar(min = 0, max = nsteps, style = 3)
   }
+
   for(m in 1:nsteps) {
     if(verbose) setTxtProgressBar(pb, m)
     samporder <- (1:p)[order(runif(p))]
@@ -68,6 +70,7 @@ exactMSmle <- function(X, y, ysig, threshold,
                            burnin = 80, trim = 4, samporder = samporder,
                            verbose = FALSE)
     prevSamp <- condSamp[nsamps, ]
+    samples[m, ] <- condSamp[nsamps, ]
     grad <- (suffStat[selected] - colMeans(condSamp)[selected])
     mt <- b1 * mt + (1 - b1) * grad
     vt <- b2 * vt + (1 - b2) * grad^2
@@ -90,5 +93,6 @@ exactMSmle <- function(X, y, ysig, threshold,
 
   betahat <- colMeans(estimates[round(nrow(estimates)/2):nrow(estimates), ])
   #print(cbind(betahat, naive))
-  return(list(mle = betahat, estimates = estimates, naive = naive))
+  return(list(mle = betahat, estimates = estimates, naive = naive,
+              samples = samples))
 }
