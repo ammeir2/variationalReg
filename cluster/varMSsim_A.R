@@ -1,7 +1,7 @@
-library(variationalReg)
-args <- commandArgs(TRUE)
-eval(parse(text=args[[1]]))
-seed <- as.numeric(seed)
+# library(variationalReg)
+# args <- commandArgs(TRUE)
+# eval(parse(text=args[[1]]))
+# seed <- as.numeric(seed)
 
 getCover <- function(ci, truth) {
   cover <- 0
@@ -69,8 +69,8 @@ run.sim <- function(config) {
     nbfit <- NULL
     try(nbfit <- approxConditionalMLE(X, y, ysig, threshold,
                                       thresholdLevel = 0.01 / nselect,
-                                      verbose = FALSE, bootSamples = 2000,
-                                      varCI = TRUE, computeMLE = TRUE))
+                                      verbose = TRUE, bootSamples = 2000,
+                                      varCI = FALSE, computeMLE = TRUE))
     polyCI <- nbfit$polyCI
     mle <- NULL
     if(is.null(nbfit)) {
@@ -99,7 +99,7 @@ run.sim <- function(config) {
                             true = true[selected], projTrue = projTrue)
     cis <- list(naive = naivenaiveCI,
                 naiveBoot = nbfit$naiveBootCI,
-                varBoot = nbfit$varBootCI,
+                # varBoot = nbfit$varBootCI,
                 mleCI = nbfit$mleCI,
                 poly = nbfit$polyCI,
                 ind = indCI)
@@ -119,19 +119,20 @@ run.sim <- function(config) {
 configurations <- expand.grid(n = 200,
                               p = c(100),
                               # snr = 2^((-10):0),
-                              snr = 2^(seq(from = -10, to = 0, by = 2)),
+                              # snr = 2^(seq(from = -10, to = 0, by = 2)),
                               # snr = 2^(seq(from = -9, to = -1, by = 2)),
-                              # snr = 2^-9,
+                              snr = 2^-1,
                               # sparsity = c(1, 2, 4, 8),
                               sparsity = c(2, 8),
                               covtype = c(2),
                               # rho = c(0, 0.35, 0.7),
-                              rho = c(0, 0.7),
+                              # rho = c(0, 0.7),
+                              rho = c(0.7),
                               nselect = c(10),
-                              reps = 1)
+                              reps = 10)
 set.seed(seed)
 runif(8)
-subconfig <- configurations[sample.int(nrow(configurations), 6), ]
+subconfig <- configurations[sample.int(nrow(configurations), 1), ]
 results <- apply(subconfig, 1, run.sim)
 filename <- paste("results/variationalSim_univConstZ_F", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)

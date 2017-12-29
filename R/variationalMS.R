@@ -26,25 +26,9 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   # Computing conditionalMLE
   if(computeMLE) {
     mlefit <- exactMSmle(X, y, ysig, threshold,
-                      nsteps = 2500, stepCoef = 0.01, stepRate = 0.6,
+                      nsteps = 1000, stepCoef = 0.01, stepRate = 0.6,
                       verbose = verbose)
     mle <- mlefit$mle
-    suffsamp <- mlefit$samples / nrow(X)
-    suffsamp <- suffsamp[1000:nrow(suffsamp), ]
-    forQuantiles <- apply(suffsamp, 2, function(x) x - mean(x))
-    variance <- var(sqrt(nrow(X)) * forQuantiles)
-    # variance <- var(forQuantiles)
-    A <- diag(p)
-    A[selected, ] <- variance[selected, ]
-    Ainv <- solve(A)
-    forQuantiles <- forQuantiles %*% Ainv * sqrt(nrow(X))
-    quantiles <- apply(forQuantiles[, selected, drop = FALSE], 2,
-                       function(x) quantile(x, probs = c(1 - cilevel / 2, cilevel / 2)))
-    quantiles <- quantiles * ysig^2 / sqrt(nrow(X))
-    mleCI <- matrix(nrow = sum(selected), ncol = 2)
-    for(i in 1:nrow(mleCI)) {
-      mleCI[i, ] <- mle[i] - quantiles[, i]
-    }
   } else {
     mle <- NULL
     mleCI <- NULL
@@ -98,6 +82,25 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   condSamp <- do.call("rbind", samples)
   for(i in 1:ncol(condSamp)) {
     condSamp[, i] <- condSamp[, i] * sqrt(diagvar[i])
+  }
+
+  # MLE CI -------
+  if(computeMLE) {
+    suffsamp <- condSamp / nrow(X)
+    forQuantiles <- apply(suffsamp, 2, function(x) x - mean(x))
+    variance <- var(sqrt(nrow(X)) * forQuantiles)
+    # variance <- var(forQuantiles)
+    A <- diag(p)
+    A[selected, ] <- variance[selected, ]
+    Ainv <- solve(A)
+    forQuantiles <- forQuantiles %*% Ainv * sqrt(nrow(X))
+    quantiles <- apply(forQuantiles[, selected, drop = FALSE], 2,
+                       function(x) quantile(x, probs = c(1 - cilevel / 2, cilevel / 2)))
+    quantiles <- quantiles * ysig^2 / sqrt(nrow(X))
+    mleCI <- matrix(nrow = sum(selected), ncol = 2)
+    for(i in 1:nrow(mleCI)) {
+      mleCI[i, ] <- mle[i] - quantiles[, i]
+    }
   }
 
   # Naive Cond Boot -----------------
