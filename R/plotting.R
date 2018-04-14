@@ -38,6 +38,7 @@ plotEstimates <- function(estimates, CIs, offset = 0.12) {
     geom_point(data = subset(plotdat, !is.na(estimate_type)),
                aes(x = variable, y = estimate, shape = estimate_type)) +
     scale_color_discrete(name = "CI Type") +
+    # scale_color_discrete(name = "Estimate Type") +
     scale_shape_discrete(name = "Estimate Type") +
     scale_linetype_discrete(name = "CI Type") +
     ylab("Estimates / CIs") + xlab("Variable")

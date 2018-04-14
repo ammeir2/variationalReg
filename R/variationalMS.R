@@ -26,12 +26,16 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   # Computing conditionalMLE
   if(computeMLE) {
     mlefit <- exactMSmle(X, y, ysig, threshold,
-                      nsteps = 1000, stepCoef = 0.01, stepRate = 0.6,
+                      nsteps = 1000, stepCoef = 0.02, stepRate = 0.6,
                       verbose = verbose)
+    coefPath <- mlefit$estimates
+    sampPath <- mlefit$samples
     mle <- mlefit$mle
   } else {
     mle <- NULL
     mleCI <- NULL
+    coefPath <- NULL
+    sampPath <- NULL
   }
 
   # Polyhedral fit ----
@@ -83,6 +87,7 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
   for(i in 1:ncol(condSamp)) {
     condSamp[, i] <- condSamp[, i] * sqrt(diagvar[i])
   }
+  thresholdMean <- thresholdMean * sqrt(diagvar)
 
   # MLE CI -------
   if(computeMLE) {
@@ -126,8 +131,10 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
                  polyCI = polyfit$ci,
                  polyBootCI = polyfit$bootCI,
                  mleCI = mleCI,
+                 suffSamp = condSamp,
                  naiveBoot = naiveBoot,
                  varBoot = varBoot,
+                 sampMean = thresholdMean,
                  sampCoef = thresholdCoef,
                  cilevel = cilevel,
                  ysig = ysig,
@@ -135,6 +142,9 @@ approxConditionalMLE <- function(X, y, ysig, threshold,
                  suffCov = suffCov,
                  threshold = threshold,
                  selected = selected,
+                 coefPath = coefPath,
+                 sampPath = sampPath,
+                 sampleSize = nrow(X),
                  call = match.call())
   class(result) <- "varMS"
   return(result)

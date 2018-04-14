@@ -35,12 +35,14 @@ names(coverdat)[8:9] <- c("type", "cover")
 coverdat <- summarize(group_by(coverdat, n, p, snr, sparsity, covtype, type, rho, pthreshold),
                     sd = sd(cover, na.rm = TRUE) / sqrt(length(cover)) ,
                     cover = mean(cover, na.rm = TRUE))
-ggplot(subset(coverdat)) +
+forWorkshop <- subset(coverdat, pthreshold == 0.001)
+ggplot(subset(forWorkshop)) +
   geom_line(aes(x = log2(snr), y = cover, col = type, linetype = type)) +
-  facet_grid(sparsity ~ pthreshold, labeller = "label_both") + theme_bw() +
+  facet_grid(pthreshold ~ sparsity, labeller = "label_both") + theme_bw() +
   geom_segment(aes(x = log2(snr), xend = log2(snr), col = type,
                    y = cover + 2 * sd, yend = cover - 2*sd)) +
   geom_hline(yintercept = 0.95)
+ggsave(file = "vartex/aggCover.pdf", width = 10, height = 3)
 
 # Power ---
 computePower <- function(x) {
@@ -67,14 +69,16 @@ names(powerdat)[8:9] <- c("type", "power")
 powerdat <- summarize(group_by(powerdat, n, p, snr, sparsity, covtype, pthreshold, type, rho),
                      sd = sd(power, na.rm = TRUE) / sqrt(length(power)) ,
                      power = mean(power, na.rm = TRUE))
-ggplot(subset(powerdat)) +
+forWorkshop <- subset(powerdat, pthreshold == 0.001)
+ggplot(subset(forWorkshop)) +
   geom_line(aes(x = log2(snr), y = power, col = type, linetype = type)) +
   geom_point(aes(x = log2(snr), y = power, col = type, shape = type)) +
-  facet_grid(sparsity ~ pthreshold, labeller = "label_both", scales = "free_y") +
+  facet_grid(pthreshold ~ sparsity, labeller = "label_both", scales = "free_y") +
   theme_bw() +
   geom_segment(aes(x = log2(snr), xend = log2(snr), col = type, linetype = type,
                    y = power + 2 * sd, yend = power - 2*sd)) +
   ylim(0, 1)
+ggsave(file = "vartex/aggPower.pdf", width = 10, height = 3)
 
 # Size -----
 computeSize <- function(x) {

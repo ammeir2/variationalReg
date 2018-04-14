@@ -14,7 +14,7 @@ getCover <- function(ci, truth) {
 # filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_contrastZ_A_*"))
 # filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_univZ_A_*"))
 filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_univConstZ_F_*"))
-filenames <- lapply(filenames, function(x) paste0('simulations/results/', x))[-c(3, 4)]
+filenames <- lapply(filenames, function(x) paste0('simulations/results/', x))
 results <- lapply(filenames, function(x) try(readRDS(x)))
 results <- do.call("c", results)
 results <- do.call("c", results)
@@ -48,12 +48,48 @@ coverdat <- summarize(group_by(coverdat, n, p, snr, sparsity, covtype, nselect, 
                       sd = sd(cover, na.rm = TRUE) / sqrt(length(cover)) ,
                       cover = mean(cover, na.rm = TRUE))
 quant <- qnorm(1 - 0.05 / 2)
-ggplot(subset(coverdat, covtype == 2 & snr != 0.01 & snr <= 2)) +
+coverdat$type <- as.character(coverdat$type)
+coverdat$type[coverdat$type == "naiveBoot"] <- "bootstrap"
+coverdat <- subset(coverdat, covtype == 2 & snr != 0.01 & snr <= 2 & type %in% c("naive", "bootstrap", "poly"))
+coverdat$type <- factor(coverdat$type, levels = c("naive", "bootstrap", "poly"))
+coverdat$rholab <- "Independent Design"
+coverdat$rholab[coverdat$rho == 0.7] <- "AR Design"
+coverdat$rholab <- factor(coverdat$rholab, levels = c("Independent Design", "AR Design"))
+coverdat$sparselab <- paste("Sparsity: ", coverdat$sparsity, sep = "")
+ggplot(coverdat) +
   geom_line(aes(x = log2(snr), y = cover, col = type, linetype = type)) +
-  facet_grid(rho ~ sparsity, labeller = "label_both") + theme_bw() +
+  facet_grid(rholab ~ sparselab) +
+  theme_bw() +
   geom_segment(aes(x = log2(snr), xend = log2(snr), col = type, linetype = type,
                    y = pmin(cover + quant * sd, 1), yend = pmax(cover - quant*sd, 0))) +
-  geom_hline(yintercept = 0.95)
+  geom_hline(yintercept = 0.95) +
+  ylab("Coverage Rate") + xlab("log2(snr)")
+# ggsave("vartex/coversim.pdf", height = 5, width = 7)
+
+# Plot for Northshore -------
+ggplot(subset(coverdat, sparsity == 2 & rholab == "Independent Design" & type == "naive")) +
+  geom_line(aes(x = log2(snr), y = cover, col = type, linetype = type)) +
+  theme_bw() +
+  geom_segment(aes(x = log2(snr), xend = log2(snr), col = type, linetype = type,
+                   y = pmin(cover + quant * sd, 1), yend = pmax(cover - quant*sd, 0))) +
+  geom_hline(yintercept = 0.95, linetype = 2) +
+  ylab("Coverage Rate") + xlab("log2(snr)")
+ggsave(file = "/Users/amitmeir/Documents/academics/northshore presentation/naiveCoverMS.pdf",
+       width = 5, height = 3)
+
+coverdat$type <- as.character(coverdat$type)
+coverdat$type[coverdat$type == "bootstrap"] <- "adjusted"
+coverdat$type <- factor(coverdat$type, levels = c("naive", "adjusted", "poly"))
+ggplot(subset(coverdat, sparsity == 2 & rholab == "Independent Design" & type != "poly")) +
+  geom_line(aes(x = log2(snr), y = cover, col = type, linetype = type)) +
+  theme_bw() +
+  geom_segment(aes(x = log2(snr), xend = log2(snr), col = type, linetype = type,
+                   y = pmin(cover + quant * sd, 1), yend = pmax(cover - quant*sd, 0))) +
+  geom_hline(yintercept = 0.95, linetype = 2) +
+  ylab("Coverage Rate") + xlab("log2(snr)")
+ggsave(file = "/Users/amitmeir/Documents/academics/northshore presentation/adjCoverMS.pdf",
+       width = 5, height = 3)
+
 
 # Power ---
 computePower <- function(x) {
@@ -84,15 +120,23 @@ names(powerdat)[8:9] <- c("type", "power")
 powerdat <- summarize(group_by(powerdat, n, p, snr, sparsity, covtype, nselect, type, rho),
                       sd = sd(power, na.rm = TRUE) / sqrt(length(power)) ,
                       power = mean(power, na.rm = TRUE))
-ggplot(subset(powerdat, snr != 0.01 & snr <= 2)) +
+powerdat$type <- as.character(powerdat$type)
+powerdat$type[powerdat$type == "naiveBoot"] <- "bootstrap"
+powerdat$type <- factor(powerdat$type, levels = c("naive", "bootstrap", "poly"))
+powerdat$sparselab <- paste("Sparsity:", powerdat$sparsity)
+powerdat$rholab <- "Independent Design"
+powerdat$rholab[powerdat$rho == 0.7] <- "AR Design"
+powerdat$rholab <- factor(powerdat$rholab, levels = c("Independent Design", "AR Design"))
+ggplot(subset(powerdat, snr != 0.01 & snr <= 2 &
+                type %in% c("naive", "poly", "bootstrap"))) +
   geom_line(aes(x = log2(snr), y = power, col = type, linetype = type)) +
   geom_point(aes(x = log2(snr), y = power, col = type, shape = type)) +
-  facet_grid(rho ~ sparsity, labeller = "label_both", scales = "free_y") +
+  facet_grid(rholab ~ sparselab, scales = "free_y") +
   theme_bw() +
   geom_segment(aes(x = log2(snr), xend = log2(snr), col = type, linetype = type,
                    y = pmin(power + quant * sd, 1), yend = pmax(power - quant*sd, 0))) +
-  ylim(0, 1)
-
+  ylim(0, 1) + ylab("Power")
+# ggsave("vartex/powersim.pdf", height = 5, width = 7)
 
 # Size -----
 computeSize <- function(x) {
@@ -118,13 +162,23 @@ names(sizedat)[8:9] <- c("type", "relsize")
 sizedat <- summarize(group_by(sizedat, n, p, snr, sparsity, covtype, nselect, type, rho),
                      sd = sd(relsize, na.rm = TRUE) / sqrt(length(relsize)) ,
                      relsize = mean(relsize, na.rm = TRUE))
-ggplot(subset(sizedat, snr != 0.01 & snr <= 2 & type != "ind")) +
+sizedat$type <- as.character(sizedat$type)
+sizedat$type[sizedat$type == "naiveBoot"] <- "bootstrap"
+sizedat$type <- factor(sizedat$type, levels = c("bootstrap", "poly"))
+sizedat$sparselab <- paste("Sparsity:", sizedat$sparsity)
+sizedat$rholab <- "Independent Design"
+sizedat$rholab[sizedat$rho == 0.7] <- "AR Design"
+sizedat$rholab <- factor(sizedat$rholab, levels = c("Independent Design", "AR Design"))
+ggplot(subset(sizedat, snr != 0.01 & snr <= 2 &
+                type %in% c("bootstrap", "poly", "naive"))) +
   geom_line(aes(x = log2(snr), y = relsize, col = type, linetype = type)) +
   geom_point(aes(x = log2(snr), y = relsize, col = type, shape = type)) +
-  facet_grid(rho ~ sparsity, labeller = "label_both") + theme_bw() +
+  facet_grid(rholab ~ sparselab) + theme_bw() +
   geom_segment(aes(x = log2(snr), xend = log2(snr), col = type, linetype = type,
                    y = relsize + quant * sd, yend = relsize - quant*sd)) +
-  geom_hline(yintercept = 0)
+  geom_hline(yintercept = 0) +
+  ylab("log2(CI size / naive CI size)")
+# ggsave("vartex/sizesim.pdf", height = 5, width = 7)
 
 # Rel MSE -------
 computeRelMSE <- function(x) {
@@ -145,15 +199,21 @@ names(relmsedat)[8:9] <- c("type", "rmse")
 relmsedat <- summarize(group_by(relmsedat, n, p, snr, sparsity, covtype, nselect, type, rho),
                        sd = sd(rmse, na.rm = TRUE) / sqrt(length(rmse)) ,
                        rmse = mean(rmse, na.rm = TRUE))
-ggplot(subset(relmsedat, covtype == 2 & snr != 0.01)) +
+relmsedat$rholab <- "Independent Design"
+relmsedat$rholab[relmsedat$rho == 0.7] <- "AR Design"
+relmsedat$rholab <- factor(relmsedat$rholab, levels = c("Independent Design", "AR Design"))
+relmsedat$sparselab <- "Sparsity = 2"
+relmsedat$sparselab[relmsedat$sparsity == 8] <- "Sparsity = 8"
+ggplot(subset(relmsedat, covtype == 2 & type != "var")) +
   geom_line(aes(x = log2(snr), y = rmse, col = type, linetype = type)) +
   geom_point(aes(x = log2(snr), y = rmse, col = type, shape = type)) +
-  facet_grid(rho ~ sparsity, labeller = "label_both") + theme_bw() +
+  facet_grid(rholab ~ sparselab) + theme_bw() +
   geom_hline(yintercept = 0) +
   geom_segment(aes(x = log2(snr), xend = log2(snr),
                    y = rmse - quant*sd, yend = rmse + quant*sd,
                    linetype = type, col = type)) +
-  ylab("Relative MSE") + xlab("log2(sample size)")
+  ylab("Relative MSE") + xlab("log2(snr)")
+ggsave(filen = "vartex/relMSE.pdf", width = 7, height = 5)
 
 # MSE ----
 # computeMSE <- function(x) {
