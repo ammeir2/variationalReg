@@ -1,7 +1,7 @@
-# library(variationalReg)
-# args <- commandArgs(TRUE)
-# eval(parse(text=args[[1]]))
-# seed <- as.numeric(seed)
+library(variationalReg)
+args <- commandArgs(TRUE)
+eval(parse(text=args[[1]]))
+seed <- as.numeric(seed)
 
 getCover <- function(ci, truth) {
   cover <- 0
@@ -123,20 +123,17 @@ configurations <- expand.grid(n = 200,
                               # snr = 2^((-10):0),
                               # snr = 2^(seq(from = -10, to = 0, by = 2)),
                               snr = 2^(seq(from = -9, to = -1, by = 2)),
-                              snr = 2^-1,
+                              # snr = 2^-1,
                               # sparsity = c(1, 2, 4, 8),
                               sparsity = c(2, 8),
                               covtype = c(2),
                               rho = c(0, 0.35, 0.7),
-                              # rho = c(0, 0.7),
-                              # rho = c(0, 0.7),
                               nselect = c(10),
-                              reps = 3)
-# set.seed(seed)
-runif(8)
-subconfig <- configurations[sample.int(nrow(configurations), 1), ]
+                              reps = 2)
+set.seed(seed)
+subconfig <- configurations[sample.int(nrow(configurations), 3), ]
 results <- apply(subconfig, 1, run.sim)
-filename <- paste("results/variationalSim_univConstZ_F", seed, ".rds", sep = "")
+filename <- paste("results/variationalSim_oneStep_A", seed, ".rds", sep = "")
 saveRDS(object = results, file = filename)
 
 

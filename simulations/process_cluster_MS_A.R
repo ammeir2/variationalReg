@@ -13,7 +13,8 @@ getCover <- function(ci, truth) {
 # filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_H_*"))
 # filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_contrastZ_A_*"))
 # filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_univZ_A_*"))
-filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_univConstZ_F_*"))
+# filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_univConstZ_F_*"))
+filenames <- as.list(dir(path = 'simulations/results', pattern="variationalSim_oneStep_A_*"))
 filenames <- lapply(filenames, function(x) paste0('simulations/results/', x))
 results <- lapply(filenames, function(x) try(readRDS(x)))
 results <- do.call("c", results)
@@ -49,9 +50,9 @@ coverdat <- summarize(group_by(coverdat, n, p, snr, sparsity, covtype, nselect, 
                       cover = mean(cover, na.rm = TRUE))
 quant <- qnorm(1 - 0.05 / 2)
 coverdat$type <- as.character(coverdat$type)
-coverdat$type[coverdat$type == "naiveBoot"] <- "bootstrap"
-coverdat <- subset(coverdat, covtype == 2 & snr != 0.01 & snr <= 2 & type %in% c("naive", "bootstrap", "poly"))
-coverdat$type <- factor(coverdat$type, levels = c("naive", "bootstrap", "poly"))
+# coverdat$type[coverdat$type == "naiveBoot"] <- "bootstrap"
+# coverdat <- subset(coverdat, covtype == 2 & snr != 0.01 & snr <= 2 & type %in% c("naive", "bootstrap", "poly"))
+# coverdat$type <- factor(coverdat$type, levels = c("naive", "bootstrap", "poly"))
 coverdat$rholab <- "Independent Design"
 coverdat$rholab[coverdat$rho == 0.7] <- "AR Design"
 coverdat$rholab <- factor(coverdat$rholab, levels = c("Independent Design", "AR Design"))
